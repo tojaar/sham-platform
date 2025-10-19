@@ -101,4 +101,4 @@ export default function Home() {
     </div>
   );
 }
-<h1>مرحباً بك في منصة شام!</h1>
+<h1 style={{ color: 'red' }}>تجربة تعديل من ملك</h1>
