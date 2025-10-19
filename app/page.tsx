@@ -15,7 +15,7 @@ export default function HomePage() {
 
         <Link href="/merchant" className="group flex items-center gap-4 bg-white shadow-md rounded-lg p-4 hover:bg-green-100 transition">
           <FaStore className="text-green-500 text-2xl group-hover:scale-110 transition-transform" />
-          <span className="text-lg font-semibold text-gray-700">تاجر</span>
+          <span className="text-lg font-semibold text-gray-700">نشر اعلاناتك</span>
         </Link>
 
         <Link href="/producer" className="group flex items-center gap-4 bg-white shadow-md rounded-lg p-4 hover:bg-yellow-100 transition">
