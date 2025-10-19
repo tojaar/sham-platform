@@ -101,3 +101,4 @@ export default function Home() {
     </div>
   );
 }
+<h1>مرحباً بك في منصة شام!</h1>
