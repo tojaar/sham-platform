@@ -37,8 +37,8 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white/70 p-4 rounded shadow text-center">
-            <h3 className="font-bold text-lg mb-2">إعلانات مجانية</h3>
-            <p className="text-sm text-gray-600">أنشر إعلانك بدون أي تكلفة</p>
+            <h3 className="font-bold text-lg mb-2">انشر اعلاناتك باقل تكبفة</h3>
+            <p className="text-sm text-gray-600">قم بالحصول على ارباح مباشرة</p>
           </div>
           <div className="bg-white/70 p-4 rounded shadow text-center">
             <h3 className="font-bold text-lg mb-2">أدوار متعددة</h3>
