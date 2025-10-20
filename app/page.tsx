@@ -23,7 +23,7 @@ export default function HomePage() {
           </Link>
           <Link href="/merchant" className="group flex items-center gap-3 bg-green-100 hover:bg-green-200 p-4 rounded-lg shadow transition">
             <FaStore className="text-green-600 text-xl group-hover:scale-110 transition-transform" />
-            <span className="text-gray-800 font-semibold">انشر اعلاناتك</span>
+            <span className="text-gray-800 font-semibold">تاجر</span>
           </Link>
           <Link href="/producer" className="group flex items-center gap-3 bg-yellow-100 hover:bg-yellow-200 p-4 rounded-lg shadow transition">
             <FaTools className="text-yellow-600 text-xl group-hover:scale-110 transition-transform" />
@@ -37,8 +37,8 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <div className="bg-white/70 p-4 rounded shadow text-center">
-            <h3 className="font-bold text-lg mb-2">انشر اعلاناتك باقل تكبفة</h3>
-            <p className="text-sm text-gray-600">قم بالحصول على ارباح مباشرة</p>
+            <h3 className="font-bold text-lg mb-2">إعلانات مجانية</h3>
+            <p className="text-sm text-gray-600">أنشر إعلانك بدون أي تكلفة</p>
           </div>
           <div className="bg-white/70 p-4 rounded shadow text-center">
             <h3 className="font-bold text-lg mb-2">أدوار متعددة</h3>
