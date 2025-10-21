@@ -11,7 +11,7 @@ export default function HomePage() {
       }}
     >
       <div className="bg-white/80 backdrop-blur-md rounded-xl p-6 shadow-lg w-full max-w-3xl">
-        <h1 className="text-4xl font-bold text-center text-gray-800 mb-4">منصة شام للإعلانات</h1>
+        <h1 className="text-4xl font-bold text-center text-gray-800 mb-4">منصة تجار للإعلانات</h1>
         <p className="text-center text-gray-700 mb-6">
           منصة مجانية تجمع الزوار، التجار، والمنتجين لعرض وطلب الخدمات والمنتجات بكل سهولة.
         </p>
