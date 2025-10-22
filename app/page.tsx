@@ -23,7 +23,7 @@ export default function HomePage() {
           </Link>
           <Link href="/producer" className="group flex items-center gap-3 bg-yellow-100 hover:bg-yellow-200 p-4 rounded-lg shadow transition">
             <FaTools className="text-yellow-600 text-xl group-hover:scale-110 transition-transform" />
-            <span className="text-gray-800 font-semibold">عضو منتِج</span>
+            <span className="text-gray-800 font-semibold">عضو مميز</span>
           </Link>
           <Link href="/jobs" className="group flex items-center gap-3 bg-red-100 hover:bg-red-200 p-4 rounded-lg shadow transition">
             <FaBriefcase className="text-red-600 text-xl group-hover:scale-110 transition-transform" />
