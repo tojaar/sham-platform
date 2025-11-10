@@ -1,7 +1,22 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// fix Leaflet icons for bundlers
+if (typeof window !== 'undefined') {
+  try {
+    delete (L.Icon.Default as any).prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+      iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+      shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+    });
+  } catch {}
+}
 
 type Comm = {
   id: string;
@@ -18,24 +33,66 @@ type Comm = {
   address?: string | null;
   location?: string | null; // نص أو "lat,lng"
   image_url?: string | null;
+  company_logo?: string | null;
   status?: string | null;
   approved?: boolean | null;
   created_at?: string | null;
   [key: string]: any;
 };
 
+// helper: parse location strings like "lat,lng" or JSON-ish
+const parseLocation = (loc?: string | null) => {
+  if (!loc) return null;
+  try {
+    const s = String(loc).trim();
+    // coords "lat,lng" or "lat lng"
+    const parts = s.includes(',') ? s.split(',') : s.split(/\s+/);
+    if (parts.length >= 2) {
+      const lat = Number(parts[0]);
+      const lng = Number(parts[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    // try JSON
+    if (s.startsWith('{')) {
+      const parsed = JSON.parse(s.replace(/(\w+)\s*:/g, '"$1":'));
+      const lat = Number(parsed.lat ?? parsed.latitude ?? parsed.latitiude);
+      const lng = Number(parsed.lng ?? parsed.longitude ?? parsed.long);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+// Map auto-fit helper when given coords
+function MapAutoCenter({ coords }: { coords: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!map || !coords) return;
+    try {
+      map.invalidateSize();
+      map.setView([coords.lat, coords.lng], Math.max(12, map.getZoom ? map.getZoom() : 13), { animate: false });
+    } catch {}
+  }, [map, coords]);
+  return null;
+}
+
 export default function SearchCommPage(): JSX.Element {
   const [comms, setComms] = useState<Comm[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [q, setQ] = useState(''); // بحث بالعناوين أو التصنيف
+  const [q, setQ] = useState(''); // search text
   const [country, setCountry] = useState<string | ''>('');
   const [province, setProvince] = useState<string | ''>('');
   const [city, setCity] = useState<string | ''>('');
   const [category, setCategory] = useState<string | ''>('');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const [selected, setSelected] = useState<Comm | null>(null);
+  const [mapKey, setMapKey] = useState(0);
+  const mapRef = useRef<any>(null);
 
   const fetchComms = async () => {
     setLoading(true);
@@ -49,10 +106,10 @@ export default function SearchCommPage(): JSX.Element {
         .range(0, 99999);
 
       if (error) throw error;
-      setComms(data || []);
+      setComms((data || []) as Comm[]);
     } catch (err: any) {
       console.error('fetchComms error', err);
-      setMessage('تعذر جلب البيانات: ' + (err.message || String(err)));
+      setMessage('تعذر جلب البيانات: ' + (err?.message ?? String(err)));
       setComms([]);
     } finally {
       setLoading(false);
@@ -90,37 +147,46 @@ export default function SearchCommPage(): JSX.Element {
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms]);
 
+  // advanced search: tokenization, simple boosting for title/company
   const filtered = useMemo(() => {
     const qLower = q.trim().toLowerCase();
+    const tokens = qLower.split(/\s+/).filter(Boolean);
+
     return comms.filter((c) => {
       if (country && c.country !== country) return false;
       if (province && c.province !== province) return false;
       if (city && c.city !== city) return false;
       if (category && c.category !== category) return false;
-      if (!qLower) return true;
-      const fields = [c.title, c.company, c.category, c.description, c.city, c.province].filter(Boolean).map(String);
-      return fields.some(f => f.toLowerCase().includes(qLower));
+
+      if (!tokens.length) return true;
+
+      // match tokens across multiple important fields
+      const hay = [
+        c.title ?? '',
+        c.company ?? '',
+        c.category ?? '',
+        c.description ?? '',
+        c.city ?? '',
+        c.province ?? '',
+        c.price ?? '',
+      ].join(' | ').toLowerCase();
+
+      // require all tokens to appear in hay (AND search). if any token missing, exclude
+      return tokens.every((t) => hay.includes(t));
     });
   }, [comms, country, province, city, category, q]);
 
-  const mapEmbedUrlFor = (c: Comm) => {
-    const parts: string[] = [];
-    if (c.location && typeof c.location === 'string' && c.location.trim()) parts.push(c.location.trim());
-    if (c.address && typeof c.address === 'string' && c.address.trim()) parts.push(c.address.trim());
-    if (c.city && typeof c.city === 'string' && c.city.trim()) parts.push(c.city.trim());
-    if (c.province && typeof c.province === 'string' && c.province.trim()) parts.push(c.province.trim());
-    if (c.country && typeof c.country === 'string' && c.country.trim()) parts.push(c.country.trim());
-    const locRaw = parts.join(' ').trim();
+  // UI helpers
+  const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleString() : '');
 
-    const coordsMatch = locRaw.match(/^(-?\d+(\.\d+)?),\s*(-?\d+(\.\d+)?)$/);
-    if (coordsMatch) {
-      const lat = coordsMatch[1];
-      const lng = coordsMatch[3];
-      return `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}&output=embed;`
-    }
-
-    const encoded = encodeURIComponent(locRaw || '');
-    return `https://www.google.com/maps?q=${encoded}&output=embed;`
+  // when opening details, force map remount
+  const openDetails = (c: Comm) => {
+    setSelected(c);
+    setMapKey((k) => k + 1);
+    // small delay so modal opens before map attempts invalidateSize
+    setTimeout(() => {
+      try { if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') mapRef.current.invalidateSize(); } catch {}
+    }, 200);
   };
 
   return (
@@ -131,22 +197,19 @@ export default function SearchCommPage(): JSX.Element {
         <header className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 justify-between mb-6">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">إعلانات تجارية</h1>
-            <p className="mt-1 text-sm text-white/70">استعرض الإعلانات التجارية، ابحث حسب العنوان، الفئة أو الموقع.</p>
+            <p className="mt-1 text-sm text-white/70">استعرض الإعلانات التجارية — بحث متقدم، معاينة وسائط، وخريطة تفاعلية</p>
           </div>
 
           <div className="w-full sm:w-[520px]">
-            <label className="block text-xs text-white/60 mb-2">بحث في العنوان أو الفئة</label>
+            <label className="block text-xs text-white/60 mb-2">بحث متقدم</label>
             <div className="flex gap-2">
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="مثال: تاجير معدات، بيع، محل، عرض خاص..."
+                placeholder="بحث: عنوان، شركة، فئة، مدينة..."
                 className="flex-1 px-4 py-2 rounded-lg bg-[#0f1721] border border-white/6 focus:border-cyan-400 outline-none transition"
               />
-              <button
-                onClick={() => { /* الفلترة تتم تلقائياً */ }}
-                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white font-medium"
-              >
+              <button onClick={() => { /* no-op, filtering reactive */ }} className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white font-medium">
                 بحث
               </button>
             </div>
@@ -155,48 +218,38 @@ export default function SearchCommPage(): JSX.Element {
 
         <section className="bg-[#071827] border border-white/6 rounded-lg p-4 mb-6 shadow-sm">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="flex-1 min-w-0">
-              <label className="text-xs text-white/60">الدولة</label>
+            <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-4 gap-3">
               <select
                 value={country}
                 onChange={(e) => { setCountry(e.target.value); setProvince(''); setCity(''); }}
-                className="w-full mt-1 px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
+                className="w-full px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
               >
                 <option value="">كل الدول</option>
                 {countries.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-            </div>
 
-            <div className="flex-1 min-w-0">
-              <label className="text-xs text-white/60">المحافظة</label>
               <select
                 value={province}
                 onChange={(e) => { setProvince(e.target.value); setCity(''); }}
-                className="w-full mt-1 px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
+                className="w-full px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
               >
                 <option value="">كل المحافظات</option>
                 {provinces.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
-            </div>
 
-            <div className="flex-1 min-w-0">
-              <label className="text-xs text-white/60">المدينة</label>
               <select
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
+                className="w-full px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
               >
                 <option value="">كل المدن</option>
                 {cities.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-            </div>
 
-            <div className="flex-1 min-w-0">
-              <label className="text-xs text-white/60">الفئة</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
+                className="w-full px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
               >
                 <option value="">كل الفئات</option>
                 {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
@@ -211,6 +264,10 @@ export default function SearchCommPage(): JSX.Element {
                 إعادة الضبط
               </button>
               <div className="text-sm text-white/60 mt-1">النتائج: <span className="font-medium">{filtered.length}</span></div>
+              <div className="ml-4 flex gap-2">
+                <button onClick={() => setViewMode('list')} className={`px-3 py-2 rounded ${viewMode === 'list' ? 'bg-cyan-600' : 'bg-gray-800'}`}>قائمة</button>
+                <button onClick={() => setViewMode('grid')} className={`px-3 py-2 rounded ${viewMode === 'grid' ? 'bg-cyan-600' : 'bg-gray-800'}`}>شبكة</button>
+              </div>
             </div>
           </div>
         </section>
@@ -222,99 +279,168 @@ export default function SearchCommPage(): JSX.Element {
             <div className="py-12 text-center text-red-400">{message}</div>
           ) : filtered.length === 0 ? (
             <div className="py-12 text-center text-white/60">لا توجد نتائج تطابق بحثك الآن.</div>
-          ) : (
-            <ul className="space-y-3">
-              {filtered.map((c) => (
-                <li key={c.id}>
-                  <article
-                    onClick={() => setSelected(c)}
-                    className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-4 flex items-center gap-4 transition"
-                  >
-                    <div className="w-12 h-12 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold">
-                      <span className="text-sm">{(c.category || c.title || 'إعلان').slice(0, 2).toUpperCase()}</span>
+          ) : viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map((c) => {
+                const img = c.company_logo ?? c.image_url ?? null;
+                return (
+                  <article key={c.id} className="bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 transition flex flex-col">
+                    <div className="flex items-start gap-3">
+                      <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
+                        {img ? <img src={img} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-semibold text-cyan-300 truncate">{c.title ?? c.category ?? '—'}</h3>
+                        <div className="text-xs text-white/70 mt-1 line-clamp-2">{c.description ?? c.company ?? '—'}</div>
+                        <div className="text-xs text-white/60 mt-2">{c.city ?? '—'} • {c.province ?? '—'}</div>
+                      </div>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-sm sm:text-base font-semibold truncate">{c.title || c.category || '—'}</h3>
-                        <time className="text-xs text-white/60">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</time>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <div className="text-xs text-white/60">{c.price ?? '—'}</div>
+                      <div className="flex gap-2">
+                        <button onClick={() => openDetails(c)} className="px-3 py-1 bg-cyan-600 rounded text-sm">عرض التفاصيل</button>
                       </div>
-                      <p className="text-xs text-white/70 truncate mt-1">{c.company || c.contact || '—'}</p>
-                      <div className="mt-2 flex items-center gap-3 text-xs text-white/60">
-                        <span>{c.city || '—'}</span>
-                        <span className="hidden sm:inline">•</span>
-                        <span className="hidden sm:inline">{c.province || '—'}</span>
-                        <span className="hidden sm:inline">•</span>
-                        <span className="hidden sm:inline">{c.price ? c.price : '—'}</span>
-                      </div>
-                      <div className="mt-2 text-xs text-white/60 line-clamp-2">{c.description || ''}</div>
-                    </div>
-
-                    <div className="flex-shrink-0">
-                      <button className="px-3 py-1 rounded-md bg-white/6 hover:bg-white/10 text-sm">عرض التفاصيل</button>
                     </div>
                   </article>
-                </li>
-              ))}
+                );
+              })}
+            </div>
+          ) : (
+            // list view: image at left, content to right, mobile friendly
+            <ul className="space-y-3">
+              {filtered.map((c) => {
+                const img = c.company_logo ?? c.image_url ?? null;
+                return (
+                  <li key={c.id}>
+                    <article
+                      onClick={() => openDetails(c)}
+                      className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 flex items-center gap-4 transition"
+                    >
+                      <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
+                        {img ? <img src={img} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm sm:text-base font-semibold truncate">{c.title ?? c.category ?? '—'}</h3>
+                          <time className="text-xs text-white/60">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</time>
+                        </div>
+                        <p className="text-xs text-white/70 truncate mt-1">{c.company ?? c.contact ?? '—'}</p>
+                        <div className="mt-2 flex items-center gap-3 text-xs text-white/60">
+                          <span>{c.city ?? '—'}</span>
+                          <span className="hidden sm:inline">•</span>
+                          <span className="hidden sm:inline">{c.province ?? '—'}</span>
+                          <span className="hidden sm:inline">•</span>
+                          <span className="hidden sm:inline">{c.price ? c.price : '—'}</span>
+                        </div>
+                        <div className="mt-2 text-xs text-white/60 line-clamp-2">{c.description ?? ''}</div>
+                      </div>
+
+                      <div className="flex-shrink-0">
+                        <button className="px-3 py-1 rounded-md bg-white/6 hover:bg-white/10 text-sm">عرض التفاصيل</button>
+                      </div>
+                    </article>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
       </div>
 
+      {/* Details modal */}
       {selected && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
 
           <div className="relative max-w-4xl w-full bg-[#061017] border border-white/6 rounded-lg overflow-hidden shadow-xl z-10">
             <div className="flex items-start justify-between p-4 border-b border-white/6">
-              <div>
-                <h2 className="text-lg font-bold">{selected.title || selected.category || '—'}</h2>
-                <p className="text-sm text-white/70">{selected.company || selected.contact || '—'}</p>
+              <div className="flex items-center gap-3">
+                {selected.image_url ? (
+                  <div className="w-12 h-12 rounded-md overflow-hidden bg-[#07121a] flex items-center justify-center border border-white/6">
+                    <img src={selected.image_url} alt="شعار" className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 rounded-md flex items-center justify-center bg-gradient-to-br from-cyan-500 to-blue-600 text-black font-semibold">Co</div>
+                )}
+
+                <div>
+                  <h2 className="text-lg font-bold">{selected.title ?? selected.category ?? '—'}</h2>
+                  <p className="text-sm text-white/70">{selected.company ?? selected.contact ?? '—'}</p>
+                  <div className="text-xs text-white/60">{fmtDate(selected.created_at)}</div>
+                </div>
               </div>
+
               <button onClick={() => setSelected(null)} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded">✕</button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-              <div className="space-y-2">
-                {selected.image_url ? (
-                  <img src={selected.image_url} alt="صورة الإعلان" className="w-full h-56 object-cover rounded-md border border-white/6" />
+              <div className="space-y-3">
+                {/* show full image without cropping */}
+                {selected.company_logo ? (
+                  <div className="w-full h-56 rounded-md border border-white/6 bg-[#07171b] overflow-hidden flex items-center justify-center">
+                    <img src={selected.company_logo} alt="صورة الإعلان" className="max-w-full max-h-full object-contain" />
+                  </div>
                 ) : (
                   <div className="w-full h-56 bg-[#07171b] rounded-md border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
                 )}
 
-                <div className="text-sm text-white/70">
-                  <p><strong>العنوان / الفئة: </strong>{selected.title || selected.category || '—'}</p>
-                  <p className="mt-2"><strong>الوصف: </strong>{selected.description || '—'}</p>
-                </div>
+                <div className="text-sm text-white/70 space-y-2">
+                  <p><strong>العنوان / الفئة: </strong>{selected.title ?? selected.category ?? '—'}</p>
+                  <p><strong>الوصف: </strong>{selected.description ?? '—'}</p>
 
-                <div className="space-y-2 mt-3">
-                  <div className="text-sm text-white/70"><strong>الشركة / جهة العرض:</strong> {selected.company || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>جهة الاتصال:</strong> {selected.contact || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>الهاتف:</strong> {selected.phone || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>السعر:</strong> {selected.price || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>مكان السكن:</strong> {selected.address || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>الدولة:</strong> {selected.country || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>المحافظة:</strong> {selected.province || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>المدينة:</strong> {selected.city || '—'}</div>
-                  <div className="text-sm text-white/70"><strong>الحالة:</strong> {selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : 'بانتظار'}</div>
-                  <div className="text-sm text-white/70"><strong>تاريخ النشر:</strong> {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div><strong>الشركة:</strong> <div className="text-white/70 inline">{selected.name ?? '—'}</div></div>
+                    <div><strong>اتصال:</strong> <div className="text-white/70 inline">{selected.contact ?? '—'}</div></div>
+                    <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
+                    <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
+                    <div><strong>العنوان:</strong> <div className="text-white/70 inline">{selected.address ?? '—'}</div></div>
+                    <div><strong>الحالة:</strong> <div className="text-white/70 inline">{selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : 'بانتظار'}</div></div>
+                  </div>
+
+                  <div className="mt-2 text-xs text-white/60">
+                    <div><strong>الموقع:</strong> {selected.country ?? '—'} / {selected.province ?? '—'} / {selected.city ?? '—'}</div>
+                    <div className="mt-1"><strong>تاريخ النشر:</strong> {fmtDate(selected.created_at)}</div>
+                  </div>
                 </div>
               </div>
 
               <div className="h-64 lg:h-full bg-black rounded-md overflow-hidden border border-white/6">
-                <iframe
-                  title="خريطة الموقع"
-                  src={mapEmbedUrlFor(selected)}
-                  className="w-full h-full border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
+                {/* react-leaflet map (no iframe) */}
+                {(() => {
+                  // determine coords
+                  const loc = parseLocation(selected.location ?? undefined)
+                    ?? (selected.location_lat && selected.location_lng ? { lat: selected.location_lat, lng: selected.location_lng } : null);
+                  if (loc) {
+                    return (
+                      <MapContainer
+                        key={mapKey}
+                        whenCreated={(m) => { mapRef.current = m; setTimeout(() => { try { m.invalidateSize(); } catch {} }, 120); }}
+                        center={[loc.lat, loc.lng]}
+                        zoom={13}
+                        style={{ height: '100%', width: '100%' }}
+                        scrollWheelZoom={false}
+                      >
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+                        <MapAutoCenter coords={loc} />
+                        <Marker position={[loc.lat, loc.lng]}>
+                          <Popup>
+                            {selected.title ?? 'موقع'} <br /> {selected.address ?? ''}
+                          </Popup>
+                        </Marker>
+                      </MapContainer>
+                    );
+                  }
+                  return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">لا توجد إحداثيات صالحة لعرض الخريطة</div>;
+                })()}
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 p-4 border-t border-white/6">
               <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selected.location || '') + ' ' + (selected.address || '') + ' ' + (selected.city || ''))}`}
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? '')).trim())}`}
                 target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700"
