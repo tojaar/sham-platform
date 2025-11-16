@@ -64,7 +64,7 @@ if (typeof window !== 'undefined') {
   }
 }
 
-export default function PostAdPage(): JSX.Element {
+export default function merchantForm() {
   const router = useRouter();
 
   // form state
@@ -157,13 +157,7 @@ export default function PostAdPage(): JSX.Element {
         logoUrl = await uploadToImgbb(logoFile);
       }
 
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user) {
-        setMessage('تحتاج لتسجيل الدخول أولاً');
-        setLoading(false);
-        return;
-      }
+      
 
       const payload: any = {
         category,
@@ -183,7 +177,7 @@ export default function PostAdPage(): JSX.Element {
         payment_code: paymentCode || null,
         payment_id: paymentId || null,
         approved: false,
-        created_by: user.id,
+        
       };
 
       const { error } = await supabase.from('ads').insert([payload]);

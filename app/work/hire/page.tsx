@@ -199,8 +199,8 @@ export default function HireForm() {
           ['job_location', '🏢 مكان العمل'],
           ['hours', '⏱️ عدد الساعات'],
           ['salary', '💰 الراتب'],
-          ['payment_code', '💳 رمز شام كاش'],
-          ['transaction_id', '🧾 معرف USDT'],
+          ['payment_code', '💳 رمز شام كاش 10,000 ل.س'],
+          ['transaction_id', '🧾 معرف $1$ USDT'],
         ].map(([key, label]) => (
           <label key={key} className="flex flex-col gap-1">
             <span className="text-green-300 font-bold">{label}</span>

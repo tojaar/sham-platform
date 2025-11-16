@@ -78,7 +78,7 @@ function MapAutoCenter({ coords }: { coords: { lat: number; lng: number } | null
   return null;
 }
 
-export default function SearchCommPage(): JSX.Element {
+export default function searchcommForm() {
   const [comms, setComms] = useState<Comm[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -320,8 +320,7 @@ export default function SearchCommPage(): JSX.Element {
                     >
                       <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
                         {img ? <img src={img} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
-                      </div>
-
+                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-3">
                           <h3 className="text-sm sm:text-base font-semibold truncate">{c.title ?? c.category ?? '—'}</h3>
@@ -393,11 +392,11 @@ export default function SearchCommPage(): JSX.Element {
 
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     <div><strong>الشركة:</strong> <div className="text-white/70 inline">{selected.name ?? '—'}</div></div>
-                    <div><strong>اتصال:</strong> <div className="text-white/70 inline">{selected.contact ?? '—'}</div></div>
+                    
                     <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
                     <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
                     <div><strong>العنوان:</strong> <div className="text-white/70 inline">{selected.address ?? '—'}</div></div>
-                    <div><strong>الحالة:</strong> <div className="text-white/70 inline">{selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : 'بانتظار'}</div></div>
+                    
                   </div>
 
                   <div className="mt-2 text-xs text-white/60">
@@ -417,7 +416,8 @@ export default function SearchCommPage(): JSX.Element {
                     return (
                       <MapContainer
                         key={mapKey}
-                        whenCreated={(m) => { mapRef.current = m; setTimeout(() => { try { m.invalidateSize(); } catch {} }, 120); }}
+                        /* @ts-ignore */
+                        whenCreated={(m: any) => { mapRef.current = m; setTimeout(() => { try { (m as any).invalidateSize(); } catch {} }, 120); }}
                         center={[loc.lat, loc.lng]}
                         zoom={13}
                         style={{ height: '100%', width: '100%' }}

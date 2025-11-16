@@ -32,7 +32,7 @@ type Seeker = {
   [key: string]: any;
 };
 
-export default function AdminSeekerPage(): JSX.Element {
+export default function adminseekerForm() {
   const [rows, setRows] = useState<Seeker[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +65,7 @@ export default function AdminSeekerPage(): JSX.Element {
     try {
       const offset = page * pageSize;
       let qb: any = supabase
-        .from<Seeker>('seeker_requests')
+        .from('seeker_requests')
         .select('*', { count: 'exact' })
         .order(sortBy, { ascending: sortDir === 'asc' })
         .range(offset, offset + pageSize - 1);

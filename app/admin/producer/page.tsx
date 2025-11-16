@@ -19,10 +19,10 @@ type Member = {
   invite_code?: string | null;
   referrer_id?: string | null;
   referrer_code?: string | null;
-  generation?: number | null;
+  invite_code_self?: number | null;
   status?: string | null; // pending | approved | rejected
   created_at?: string | null;
-  usdt_trc20_link?: string | null;
+  usdt_trc20?: string | null;
   sham_cash_link?: string | null;
   sham_payment_code?: string | null;
   usdt_txid?: string | null;
@@ -31,7 +31,7 @@ type Member = {
 
 type ViewMode = 'table' | 'cards' | 'hierarchy';
 
-export default function AdminProducerPage(): JSX.Element {
+export default function adminproducerForm() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export default function AdminProducerPage(): JSX.Element {
     setError(null);
     try {
       const { data, error } = await supabase
-        .from<Member>('producer_members')
+        .from('producer_members')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -199,7 +199,7 @@ export default function AdminProducerPage(): JSX.Element {
         city: r.city ?? '',
         invite_code: r.invite_code ?? '',
         referrer_code: r.referrer_code ?? '',
-        generation: r.generation ?? '',
+        generation: r.invite_code_self ?? '',
         status: r.status ?? '',
         created_at: r.created_at ?? '',
       };
@@ -334,7 +334,7 @@ export default function AdminProducerPage(): JSX.Element {
                     <th className="px-3 py-2">دولة</th>
                     <th className="px-3 py-2">كود</th>
                     <th className="px-3 py-2">داعي</th>
-                    <th className="px-3 py-2">الطبقة</th>
+                    <th className="px-3 py-2">كود الدعوة الخاص</th>
                     <th className="px-3 py-2">حالة</th>
                     <th className="px-3 py-2">انشئت في</th>
                     <th className="px-3 py-2">إجراءات</th>
@@ -350,7 +350,7 @@ export default function AdminProducerPage(): JSX.Element {
                       <td className="px-3 py-2 align-top">{m.country}</td>
                       <td className="px-3 py-2 align-top"><code className="bg-[#021a1a] px-2 py-1 rounded text-xs">{m.invite_code}</code></td>
                       <td className="px-3 py-2 align-top">{m.referrer_code ?? '-'}</td>
-                      <td className="px-3 py-2 align-top">{m.generation ?? '-'}</td>
+                      <td className="px-3 py-2 align-top">{m.invite_code_self ?? '-'}</td>
                       <td className="px-3 py-2 align-top">
                         <span className={`px-2 py-1 rounded text-xs ${m.status === 'approved' ? 'bg-green-800/20 text-green-300' : m.status === 'rejected' ? 'bg-red-800/20 text-red-300' : 'bg-yellow-800/20 text-yellow-300'}`}>
                           {m.status ?? 'pending'}
@@ -433,7 +433,7 @@ export default function AdminProducerPage(): JSX.Element {
                             <div className="font-medium text-white">{d.full_name} <span className="text-xs text-slate-400">({d.invite_code})</span></div>
                             <div className="text-xs text-slate-300">{d.country}</div>
                           </div>
-                          <div className="text-xs text-slate-300">Gen {d.generation}</div>
+                          <div className="text-xs text-slate-300">Gen {d.invite_code_self}</div>
                         </div>
 
                         <div className="mt-2 text-sm text-slate-300">Recruits:
@@ -468,14 +468,14 @@ export default function AdminProducerPage(): JSX.Element {
                 <div><div className="text-xs text-slate-300">المدينة</div><div className="font-medium">{detail.city}</div></div>
                 <div className="md:col-span-2"><div className="text-xs text-slate-300">العنوان</div><div className="font-medium">{detail.address}</div></div>
 
-                <div><div className="text-xs text-slate-300">USDT TRC20</div><div className="font-medium">{detail.usdt_trc20_link || '-'}</div></div>
+                <div><div className="text-xs text-slate-300">USDT TRC20</div><div className="font-medium">{detail.usdt_trc20 || '-'}</div></div>
                 <div><div className="text-xs text-slate-300">شام كاش رابط</div><div className="font-medium">{detail.sham_cash_link || '-'}</div></div>
                 <div><div className="text-xs text-slate-300">رمز شام كاش</div><div className="font-medium">{detail.sham_payment_code || '-'}</div></div>
                 <div><div className="text-xs text-slate-300">TXID</div><div className="font-medium">{detail.usdt_txid || '-'}</div></div>
 
                 <div><div className="text-xs text-slate-300">كود الدعوة</div><div className="font-medium">{detail.invite_code || '-'}</div></div>
                 <div><div className="text-xs text-slate-300">داعي (كود)</div><div className="font-medium">{detail.referrer_code || '-'}</div></div>
-                <div><div className="text-xs text-slate-300">الطبقة</div><div className="font-medium">{detail.generation ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">رمز الدعوة الخاص</div><div className="font-medium">{detail.invite_code_self ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">الحالة</div><div className="font-medium">{detail.status ?? 'pending'}</div></div>
                 <div><div className="text-xs text-slate-300">معرف المستخدم</div><div className="font-medium">{detail.user_id || '-'}</div></div>
                 <div><div className="text-xs text-slate-300">تاريخ الإنشاء</div><div className="font-medium">{detail.created_at ? new Date(detail.created_at).toLocaleString() : '-'}</div></div>
@@ -483,7 +483,7 @@ export default function AdminProducerPage(): JSX.Element {
 
               <div className="mt-5 flex items-center gap-2 justify-end">
                 <button onClick={() => { setDetail(null); setEditing(detail); }} className="px-4 py-2 rounded bg-blue-600 text-white">تعديل</button>
-                <button onClick={() => requestPasswordReset(detail.email)} className="px-4 py-2 rounded bg-amber-600 text-black">طلب إعادة تعيين كلمة السر</button>
+                
                 <button onClick={() => setDetail(null)} className="px-4 py-2 border rounded text-slate-200">إغلاق</button>
               </div>
             </div>
@@ -512,7 +512,7 @@ export default function AdminProducerPage(): JSX.Element {
                 </select>
 
                 <textarea value={editing.address ?? ''} onChange={(e) => setEditing({...editing, address: e.target.value})} className="col-span-1 md:col-span-2 px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.usdt_trc20_link ?? ''} onChange={(e) => setEditing({...editing, usdt_trc20_link: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.usdt_trc20 ?? ''} onChange={(e) => setEditing({...editing, usdt_trc20: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
                 <input value={editing.sham_cash_link ?? ''} onChange={(e) => setEditing({...editing, sham_cash_link: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
                 <input value={editing.sham_payment_code ?? ''} onChange={(e) => setEditing({...editing, sham_payment_code: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
                 <input value={editing.usdt_txid ?? ''} onChange={(e) => setEditing({...editing, usdt_txid: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />

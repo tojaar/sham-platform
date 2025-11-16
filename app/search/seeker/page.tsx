@@ -32,7 +32,7 @@ type Seeker = {
   [key: string]: any;
 };
 
-export default function SearchSeekerPage(): JSX.Element {
+export default function searchseekerForm() {
   const [seekers, setSeekers] = useState<Seeker[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

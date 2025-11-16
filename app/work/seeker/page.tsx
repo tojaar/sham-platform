@@ -74,7 +74,7 @@ async function uploadToImgBB(file: File): Promise<string | null> {
   }
 }
 
-export default function SeekerPage(): JSX.Element {
+export default function seekerForm() {
   const [form, setForm] = useState({
     name: '',
     phone: '',
