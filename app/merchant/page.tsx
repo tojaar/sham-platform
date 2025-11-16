@@ -64,7 +64,7 @@ if (typeof window !== 'undefined') {
   }
 }
 
-export default function merchantForm() {
+export default function MerchantForm() {
   const router = useRouter();
 
   // form state
@@ -155,10 +155,8 @@ export default function merchantForm() {
 
       if (logoFile) {
         logoUrl = await uploadToImgbb(logoFile);
-      }
-
-      
-
+       }
+ 
       const payload: any = {
         category,
         name: isCompany ? companyName.trim() : personName.trim(),
@@ -177,8 +175,7 @@ export default function merchantForm() {
         payment_code: paymentCode || null,
         payment_id: paymentId || null,
         approved: false,
-        
-      };
+       };
 
       const { error } = await supabase.from('ads').insert([payload]);
 
@@ -322,6 +319,7 @@ export default function merchantForm() {
                 )}
               </MapContainer>
             </div>
+
             <div style={{ marginTop: 8, fontSize: 12, color: '#9fb3c9' }}>اضغط على الخريطة لاختيار الإحداثيات بدقة</div>
           </div>
 
