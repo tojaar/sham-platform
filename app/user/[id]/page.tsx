@@ -1,19 +1,26 @@
 // app/user/[id]/page.tsx
 import React from "react";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import CopyInvite from "../../../components/CopyInvite";
 import RewardsClient from "../../../components/RewardsClient";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error("Missing Supabase environment variables on server");
+}
+
+const supabaseAdmin: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false }
+});
 
 type Props = { params: { id: string } };
 type Member = {
   id: string;
   full_name?: string | null;
   email?: string | null;
-  created_at?: string | null;
+  created_at?: string | null; // keep ISO string from DB
   invite_code?: string | null;
   invite_code_self?: string | null;
   status?: string | null;
@@ -51,16 +58,16 @@ export default async function UserPage({ params }: Props) {
 
   // fetch owner
   let owner: Member | null = null;
-  try {
-    const { data } = await supabaseAdmin
+  {
+    const res = await supabaseAdmin
       .from("producer_members")
       .select("id, full_name, email, invite_code_self")
       .eq("id", id)
       .single();
-    owner = data as Member | null;
-  } catch {
-    owner = null;
+    if (!res.error && res.data) owner = res.data as Member;
+    else owner = null;
   }
+
   if (!owner) return <main style={{ padding: 20 }}><h1>المستخدم غير موجود</h1></main>;
 
   const ownerCode = safeStr(owner.invite_code_self ?? "");
@@ -68,34 +75,41 @@ export default async function UserPage({ params }: Props) {
 
   // LEVEL 1: direct invites (exact match, approved, oldest-first)
   let level1: Member[] = [];
-  try {
-    const { data } = await supabaseAdmin
+  {
+    const res = await supabaseAdmin
       .from("producer_members")
       .select("id, full_name, email, created_at, invite_code, invite_code_self, status")
       .eq("invite_code", ownerCode)
       .eq("status", "approved")
       .order("created_at", { ascending: true });
-    level1 = Array.isArray(data) ? data as Member[] : [];
-  } catch {
-    level1 = [];
+
+    if (!res.error && Array.isArray(res.data)) {
+      // keep created_at as ISO string exactly as DB returned it
+      level1 = res.data as Member[];
+    } else {
+      level1 = [];
+    }
   }
 
   // LEVEL 2: indirect invites (invite_code IN invite_code_self of level1)
   let level2: Member[] = [];
-  try {
+  {
     const l1InviteSelfs = level1.map(m => safeStr(m.invite_code_self)).filter(Boolean);
     if (l1InviteSelfs.length) {
-      const { data } = await supabaseAdmin
+      const res = await supabaseAdmin
         .from("producer_members")
         .select("id, full_name, email, created_at, invite_code, invite_code_self, status")
         .in("invite_code", l1InviteSelfs)
         .eq("status", "approved")
         .order("created_at", { ascending: true });
-      const l1Ids = new Set(level1.map(x => x.id));
-      level2 = (Array.isArray(data) ? data as Member[] : []).filter(x => !l1Ids.has(x.id));
+
+      if (!res.error && Array.isArray(res.data)) {
+        const l1Ids = new Set(level1.map(x => x.id));
+        level2 = (res.data as Member[]).filter(x => !l1Ids.has(x.id));
+      } else {
+        level2 = [];
+      }
     }
-  } catch {
-    level2 = [];
   }
 
   // counts/totals
@@ -113,7 +127,7 @@ export default async function UserPage({ params }: Props) {
     return { ...d, index: i, rewardSyp: r.syp, rewardUsd: r.usd };
   });
 
-  // sparkline from level1 (last 8 weeks)
+  // sparkline from level1 (last 8 weeks) — computed on server as counts (numbers only)
   const countsByWeek: number[] = (() => {
     try {
       const weeks = 8; const msWeek = 7 * 24 * 60 * 60 * 1000; const now = Date.now();
@@ -157,21 +171,21 @@ export default async function UserPage({ params }: Props) {
 
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <div style={{ background: "rgba(255,255,255,0.04)", padding: "8px 12px", borderRadius: 12 }}>
-              رمز الدعة الخاص بك: <strong style={{ color: "#ffd166" }}>{owner.invite_code_self ?? "—"}</strong>
+              رمز الدعوة الخاص بك: <strong style={{ color: "#ffd166" }}>{owner.invite_code_self ?? "—"}</strong>
             </div>
             <CopyInvite code={owner.invite_code_self ?? undefined} />
           </div>
         </header>
 
         <RewardsClient
-          level1={perDirectWithRewards}              // DIRECT: authoritative for progress & ladder
-          level2={level2}                            // INDIRECT: shown only and counted in totals
+          level1={perDirectWithRewards}              // direct invites (items include created_at as raw ISO)
+          level2={level2}
           level1Totals={level1Totals}
           level2Totals={level2Totals}
           combinedSyp={combinedSyp}
           combinedUsd={combinedUsd}
           perDirectWithRewards={perDirectWithRewards}
-          progressCount={level1Count % 50}          // progress uses level1 only
+          progressCount={level1Count % 50}
           progressTarget={50}
           sparklinePoints={countsByWeek}
         />

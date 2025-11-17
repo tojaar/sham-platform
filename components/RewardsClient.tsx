@@ -29,6 +29,14 @@ type Props = {
 function formatSyp(n: number) { return n.toLocaleString("en-US") + " ل.س"; }
 function formatUsd(n: number) { return "$" + n.toLocaleString("en-US"); }
 
+// Deterministic date formatter to avoid SSR/CSR mismatches.
+// We force latin digits (u-nu-latn) and fixed options so server and client produce the same string.
+const dateFormatter = new Intl.DateTimeFormat("en-GB-u-nu-latn", {
+  year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", second: "2-digit",
+  hour12: true
+});
+
 export default function RewardsClient({
   level1, level2, level1Totals, level2Totals, combinedSyp, combinedUsd, perDirectWithRewards,
   progressCount = 0, progressTarget = 50, sparklinePoints = []
@@ -36,11 +44,15 @@ export default function RewardsClient({
   const [currency, setCurrency] = useState<"SYP" | "USD">("SYP");
 
   useEffect(() => {
-    const saved = typeof window !== "undefined" ? localStorage.getItem("preferred_currency") : null;
-    if (saved === "USD" || saved === "SYP") setCurrency(saved as "SYP" | "USD");
+    try {
+      const saved = localStorage.getItem("preferred_currency");
+      if (saved === "USD" || saved === "SYP") setCurrency(saved as "SYP" | "USD");
+    } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("preferred_currency", currency);
+    try {
+      localStorage.setItem("preferred_currency", currency);
+    } catch { /* ignore */ }
   }, [currency]);
 
   // authoritative direct invites count (level1 only)
@@ -63,7 +75,7 @@ export default function RewardsClient({
     const pts = sparklinePoints.map((v, i) => {
       const x = pad + i * step;
       const y = pad + (1 - v / max) * (h - pad * 2);
-      return `${x},${y};`
+      return `${x},${y};`;
     }).join(" ");
     return { w, h, path: pts };
   })();
@@ -71,12 +83,9 @@ export default function RewardsClient({
   // =========================
   // المراتب القادمة — غير محدودة عملياً
   // =========================
-  // أين تُحسب؟ هنا:
-  // highlightedIndex = directCount  => يظلّل رتبة مساوية لعدد المباشرين الحالي
-  // ladderPreview = Array.from({ length: directCount + 100 }) => يولّد حتى 100 مرتبة إضافية
   const highlightedIndex = directCount;
   const ladderPreview = Array.from({ length: Math.max(100, directCount + 100) }).map((_, idx) => {
-    const index = idx + 1; // الرتب تبدأ من 1 وتستمر
+    const index = idx + 1;
     let syp = 1_000_000, usd = 100;
     switch (index) {
       case 1: syp = 500_000; usd = 50; break;
@@ -89,6 +98,13 @@ export default function RewardsClient({
     }
     return { index, syp, usd };
   });
+
+  const formatDateDeterministic = (iso?: string | null) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return dateFormatter.format(d);
+  };
 
   return (
     <div style={{
@@ -149,7 +165,7 @@ export default function RewardsClient({
         </div>
 
         <div style={{ width: 150, minWidth: 120 }}>
-         
+
           <div style={{ background: "rgba(255,255,255,0.03)", padding: 8, borderRadius: 10 }}>
             {sparkline ? (
               <svg width={140} height={36} viewBox={`0 0 140 36`} style={{ display: "block" }}>
@@ -212,7 +228,7 @@ export default function RewardsClient({
               <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: 10, borderRadius: 8, marginBottom: 8, background: "linear-gradient(180deg, rgba(255,255,255,0.01), transparent)" }}>
                 <div>
                   <div style={{ fontWeight: 900 }}>{p.full_name ?? p.email ?? "—"}</div>
-                  <div style={{ color: "#9fb7ff", fontSize: 12 }}>{p.created_at ? new Date(p.created_at).toLocaleString() : "—"}</div>
+                  <div style={{ color: "#9fb7ff", fontSize: 12 }}>{formatDateDeterministic(p.created_at)}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontWeight: 900 }}>{currency === "SYP" ? formatSyp(p.rewardSyp ?? 0) : formatUsd(p.rewardUsd ?? 0)}</div>
@@ -233,7 +249,7 @@ export default function RewardsClient({
               <div key={s.id} style={{ display: "flex", justifyContent: "space-between", padding: 10, borderRadius: 8, marginBottom: 8 }}>
                 <div>
                   <div style={{ fontWeight: 900 }}>{s.full_name ?? s.email ?? "—"}</div>
-                  <div style={{ color: "#9fb7ff", fontSize: 12 }}>{s.created_at ? new Date(s.created_at).toLocaleString() : "—"}</div>
+                  <div style={{ color: "#9fb7ff", fontSize: 12 }}>{formatDateDeterministic(s.created_at)}</div>
                 </div>
                 <div style={{ fontWeight: 900, color: "#9ff1d6" }}>{currency === "SYP" ? formatSyp(100_000) : formatUsd(10)}</div>
               </div>
@@ -245,7 +261,7 @@ export default function RewardsClient({
       <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "center" }}>
         <button style={{ padding: "10px 14px", borderRadius: 12, background: "linear-gradient(90deg,#06b6d4,#0b5cff)", border: "none", color: "#fff", fontWeight: 900 }}>شارك رمزك لزيادة ارباحك</button>
         <button style={{ padding: "10px 14px", borderRadius: 12, background: "transparent", border: "1px solid rgba(40, 239, 44, 0.55)", color: "#e6f7ff", fontWeight: 800 }}>  انت الان عضو منتج في شركة تجار العالمية   </button>
-      </div>تصلك الارباح خلال 24 ساعة الى محفظتك بشكل مباشر من شركة تجار العالمية  
+      </div>تصلك الارباح خلال 24 ساعة الى محفظتك بشكل مباشر من شركة تجار العالمية
     </div>
   );
 }
