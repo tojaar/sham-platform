@@ -37,7 +37,7 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-export default function AdminDashboard() {
+export default function admindashboardForm() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -115,10 +115,10 @@ export default function AdminDashboard() {
                 <th className="p-3 text-sm text-neutral-300">#</th>
                 <th className="p-3 text-sm text-neutral-300">الاسم</th>
                 <th className="p-3 text-sm text-neutral-300">البريد</th>
-                <th className="p-3 text-sm text-neutral-300"> رمز الدعوة الذي تم التسجيل به</th>
+                <th className="p-3 text-sm text-neutral-300">كود الدعوة</th>
                 <th className="p-3 text-sm text-neutral-300">الموقع</th>
                 <th className="p-3 text-sm text-neutral-300">الحالة</th>
-                <th className="p-3 text-sm text-neutral-300">رمز الدعوة الخاص</th>
+                <th className="p-3 text-sm text-neutral-300">رمز الدعوة</th>
                 <th className="p-3 text-sm text-neutral-300">تاريخ الإنشاء</th>
                 <th className="p-3 text-sm text-neutral-300">أفعال</th>
               </tr>
