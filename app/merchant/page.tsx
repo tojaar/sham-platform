@@ -1,23 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 
-// ---------- Location picker component (click to set coords) ----------
-function LocationPicker({ setCoords }: { setCoords: (coords: { lat: number; lng: number }) => void }) {
-  useMapEvents({
-    click(e) {
-      setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-    },
-  });
-  return null;
-}
-
-// ---------- helper: convert File -> base64 ----------
+// ------------ Helpers (file->base64, upload) ---------------
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -29,8 +17,7 @@ const fileToBase64 = (file: File): Promise<string> =>
     };
     reader.readAsDataURL(file);
   });
-
-// ---------- helper: upload to imgbb ----------
+                                  
 const uploadToImgbb = async (file: File | null): Promise<string | null> => {
   if (!file) return null;
   const key = process.env.NEXT_PUBLIC_IMGBB_KEY;
@@ -43,28 +30,73 @@ const uploadToImgbb = async (file: File | null): Promise<string | null> => {
     method: 'POST',
     body: form,
   });
-  const json = await res.json();
+  const json = await res.json().catch(() => null);
   if (!res.ok || !json || !json.data || !json.data.url) {
-    throw new Error(json.error?.message ?? 'فشل رفع الصورة إلى imgbb');
+    throw new Error((json && (json.error?.message || json.error || json.message)) ?? 'فشل رفع الصورة إلى imgbb');
   }
-  return json.data.url;
+  return json.data.url as string;
 };
 
-// ---------- fix leaflet default icon path (bundlers) ----------
-if (typeof window !== 'undefined') {
-  try {
-    delete (L.Icon.Default as any).prototype._getIconUrl;
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-      iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-      shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-    });
-  } catch (e) {
-    // ignore
-  }
-}
+// ------------ Client-only Map component (load react-leaflet & leaflet only in browser) ---------------
+// We define the component inline and load it with next/dynamic({ ssr: false }).
+// Inside the loader we return a module-like object with a default export (the component).
+const ClientMap = dynamic(
+  async () => {
+    // dynamic loader runs only on client because ssr: false below
+    const ReactLeaflet = await import('react-leaflet');
+    const L = (await import('leaflet')).default;
+    // Ensure marker icons use valid URLs (avoid bundler path issues)
+    try {
+      const iconRetina = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
+      const icon = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+      const shadow = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+      // @ts-ignore
+      delete (L.Icon.Default as any).prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: iconRetina,
+        iconUrl: icon,
+        shadowUrl: shadow,
+      });
+    } catch {
+      // ignore
+    }
 
-export default function MerchantForm() {
+    function LocationPicker({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
+      const map = (ReactLeaflet as any).useMapEvents({
+        click(e: any) {
+          setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+        },
+      });
+      // avoid returning map node
+      return null;
+    }
+
+    const MapComponent = ({
+      coords,
+      setCoords,
+    }: {
+      coords: { lat: number; lng: number } | null;
+      setCoords: (c: { lat: number; lng: number } | null) => void;
+    }) => {
+      const { MapContainer, TileLayer, Marker } = ReactLeaflet as any;
+      return (
+        <MapContainer center={[33.3128, 44.3615]} zoom={6} style={{ width: '100%', height: '100%' }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          <LocationPicker setCoords={(c: { lat: number; lng: number }) => setCoords(c)} />
+          {coords && <Marker position={[coords.lat, coords.lng]} />}
+        </MapContainer>
+      );
+    };
+
+    return {
+      default: MapComponent,
+    };
+  },
+  { ssr: false }
+);
+
+// ------------ Main page component ---------------
+export default function Page() {
   const router = useRouter();
 
   // form state
@@ -72,7 +104,7 @@ export default function MerchantForm() {
   const [isCompany, setIsCompany] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [personName, setPersonName] = useState('');
-  const [phone, setPhone] = useState(''); // <-- phone field
+  const [phone, setPhone] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -93,27 +125,45 @@ export default function MerchantForm() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
+  // Load Leaflet CSS only in client
   useEffect(() => {
-    if (imageFile) {
-      const url = URL.createObjectURL(imageFile);
-      setImagePreview(url);
-      return () => URL.revokeObjectURL(url);
-    } else {
-      setImagePreview(null);
+    if (typeof window === 'undefined') return;
+    const id = 'leaflet-css';
+    if (!document.getElementById(id)) {
+      const link = document.createElement('link');
+      link.id = id;
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(imageFile);
+    setImagePreview(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
   }, [imageFile]);
 
   useEffect(() => {
-    if (logoFile) {
-      const url = URL.createObjectURL(logoFile);
-      setLogoPreview(url);
-      return () => URL.revokeObjectURL(url);
-    } else {
+    if (!logoFile) {
       setLogoPreview(null);
+      return;
     }
+    const url = URL.createObjectURL(logoFile);
+    setLogoPreview(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
   }, [logoFile]);
 
   const validate = () => {
+    setMessage(null);
     if (isCompany && !companyName.trim()) {
       setMessage('الرجاء كتابة اسم الشركة');
       return false;
@@ -129,8 +179,7 @@ export default function MerchantForm() {
     if (!coords) {
       setMessage('الرجاء اختيار الموقع على الخريطة');
       return false;
-    }
-    // phone optional but if present, simple validation
+     }
     if (phone && phone.trim().length < 5) {
       setMessage('الرجاء إدخال رقم هاتف صالح أو تركه فارغاً');
       return false;
@@ -155,12 +204,12 @@ export default function MerchantForm() {
 
       if (logoFile) {
         logoUrl = await uploadToImgbb(logoFile);
-       }
- 
+      }
+
       const payload: any = {
         category,
         name: isCompany ? companyName.trim() : personName.trim(),
-        phone: phone || null, // <-- save phone
+        phone: phone || null,
         is_company: isCompany,
         company_logo: logoUrl,
         image_url: imageUrl,
@@ -175,7 +224,7 @@ export default function MerchantForm() {
         payment_code: paymentCode || null,
         payment_id: paymentId || null,
         approved: false,
-       };
+      };
 
       const { error } = await supabase.from('ads').insert([payload]);
 
@@ -201,7 +250,7 @@ export default function MerchantForm() {
       background: 'linear-gradient(180deg,#071226 0%, #08263a 100%)',
       padding: '20px',
       fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial',
-      color: '#0b1220',
+      color: '#e6eef8',
     } as React.CSSProperties,
     container: {
       maxWidth: 820,
@@ -278,8 +327,7 @@ export default function MerchantForm() {
               <input value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="الاسم" style={{ ...styles.input, flex: 1 }} />
             )}
           </div>
-
-          {/* PHONE FIELD */}
+ 
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={styles.input} />
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -309,18 +357,10 @@ export default function MerchantForm() {
               {coords ? <div style={{ fontSize: 13, color: '#bfeffd' }}>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</div> : null}
             </div>
             <div style={styles.mapWrap}>
-              <MapContainer center={[33.3128, 44.3615]} zoom={6} style={{ width: '100%', height: '100%' }}>
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <LocationPicker setCoords={setCoords} />
-                {coords && (
-                  <Marker
-                    position={[coords.lat, coords.lng]}
-                  />
-                )}
-              </MapContainer>
+              {/* Client-only map; this avoids window being accessed during SSR */}
+              <ClientMap coords={coords} setCoords={(c: { lat: number; lng: number } | null) => setCoords(c)} />
             </div>
-
-            <div style={{ marginTop: 8, fontSize: 12, color: '#9fb3c9' }}>اضغط على الخريطة لاختيار الإحداثيات بدقة</div>
+             <div style={{ marginTop: 8, fontSize: 12, color: '#9fb3c9' }}>اضغط على الخريطة لاختيار الإحداثيات بدقة</div>
           </div>
 
           <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="السعر (اختياري)" style={styles.input} />
@@ -357,7 +397,7 @@ export default function MerchantForm() {
                   setIsCompany(false);
                   setCompanyName('');
                   setPersonName('');
-                  setPhone(''); // reset phone
+                  setPhone('');
                   setLogoFile(null);
                   setImageFile(null);
                   setCountry('');
