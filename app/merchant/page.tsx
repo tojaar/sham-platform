@@ -1,11 +1,36 @@
+// app/merchant/page.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import dynamic from 'next/dynamic';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 
-// ------------ Helpers (file->base64, upload) ---------------
+// قمنا بإزالة الاستيرادات المباشرة لِـ react-leaflet و leaflet و CSS هنا
+// لأنها تسبّب خطأ window is not defined أثناء SSR.
+
+type CommPayload = {
+  category: string;
+  name: string;
+  phone?: string | null;
+  is_company: boolean;
+  company_logo?: string | null;
+  image_url?: string | null;
+  country?: string | null;
+  province?: string | null;
+  city?: string | null;
+  address?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  price?: string | null;
+  description?: string | null;
+  payment_code?: string | null;
+  payment_id?: string | null;
+  approved?: boolean;
+  created_by?: string | null;
+  [key: string]: any;
+};
+
+// helper: File -> base64
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -18,6 +43,7 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+// upload to imgbb
 const uploadToImgbb = async (file: File | null): Promise<string | null> => {
   if (!file) return null;
   const key = process.env.NEXT_PUBLIC_IMGBB_KEY;
@@ -30,73 +56,37 @@ const uploadToImgbb = async (file: File | null): Promise<string | null> => {
     method: 'POST',
     body: form,
   });
-  const json = await res.json().catch(() => null);
+  const json = await res.json();
   if (!res.ok || !json || !json.data || !json.data.url) {
-    throw new Error((json && (json.error?.message || json.error || json.message)) ?? 'فشل رفع الصورة إلى imgbb');
+    throw new Error(json.error?.message ?? 'فشل رفع الصورة إلى imgbb');
   }
-  return json.data.url as string;
+  return json.data.url;
 };
 
-// ------------ Client-only Map component (load react-leaflet & leaflet only in browser) ---------------
-// We define the component inline and load it with next/dynamic({ ssr: false }).
-// Inside the loader we return a module-like object with a default export (the component).
-const ClientMap = dynamic(
-  async () => {
-    // dynamic loader runs only on client because ssr: false below
-    const ReactLeaflet = await import('react-leaflet');
-    const L = (await import('leaflet')).default;
-    // Ensure marker icons use valid URLs (avoid bundler path issues)
-    try {
-      const iconRetina = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-      const icon = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-      const shadow = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-      // @ts-ignore
-      delete (L.Icon.Default as any).prototype._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: iconRetina,
-        iconUrl: icon,
-        shadowUrl: shadow,
-      });
-    } catch {
-      // ignore
+// parse coords text like "lat,lng" or JSON-ish
+const parseLocationString = (loc?: string | null) => {
+  if (!loc) return null;
+  try {
+    const s = String(loc).trim();
+    const parts = s.includes(',') ? s.split(',') : s.split(/\s+/);
+    if (parts.length >= 2) {
+      const lat = Number(parts[0]);
+      const lng = Number(parts[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
     }
-
-    function LocationPicker({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
-      const map = (ReactLeaflet as any).useMapEvents({
-        click(e: any) {
-          setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-        },
-      });
-      // avoid returning map node
-      return null;
+    if (s.startsWith('{')) {
+      const parsed = JSON.parse(s.replace(/(\w+)\s*:/g, '"$1":'));
+      const lat = Number(parsed.lat ?? parsed.latitude ?? parsed.latitiude);
+      const lng = Number(parsed.lng ?? parsed.longitude ?? parsed.long);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
     }
+    return null;
+  } catch {
+    return null;
+  }
+};
 
-    const MapComponent = ({
-      coords,
-      setCoords,
-    }: {
-      coords: { lat: number; lng: number } | null;
-      setCoords: (c: { lat: number; lng: number } | null) => void;
-    }) => {
-      const { MapContainer, TileLayer, Marker } = ReactLeaflet as any;
-      return (
-        <MapContainer center={[33.3128, 44.3615]} zoom={6} style={{ width: '100%', height: '100%' }}>
-          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          <LocationPicker setCoords={(c: { lat: number; lng: number }) => setCoords(c)} />
-          {coords && <Marker position={[coords.lat, coords.lng]} />}
-        </MapContainer>
-      );
-    };
-
-    return {
-      default: MapComponent,
-    };
-  },
-  { ssr: false }
-);
-
-// ------------ Main page component ---------------
-export default function Page() {
+export default function PostAdPage() {
   const router = useRouter();
 
   // form state
@@ -125,45 +115,107 @@ export default function Page() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // Load Leaflet CSS only in client
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const id = 'leaflet-css';
-    if (!document.getElementById(id)) {
-      const link = document.createElement('link');
-      link.id = id;
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-  }, []);
+  // dynamic leaflet/react-leaflet references
+  const [leafletReady, setLeafletReady] = useState(false);
+  const leafletRef = useRef<{
+    MapContainer?: any;
+    TileLayer?: any;
+    Marker?: any;
+    useMapEvents?: any;
+  } | null>(null);
+  const mapRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!imageFile) {
+    if (imageFile) {
+      const url = URL.createObjectURL(imageFile);
+      setImagePreview(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
       setImagePreview(null);
-      return;
     }
-    const url = URL.createObjectURL(imageFile);
-    setImagePreview(url);
-    return () => {
-      URL.revokeObjectURL(url);
-    };
   }, [imageFile]);
 
   useEffect(() => {
-    if (!logoFile) {
+    if (logoFile) {
+      const url = URL.createObjectURL(logoFile);
+      setLogoPreview(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
       setLogoPreview(null);
-      return;
     }
-    const url = URL.createObjectURL(logoFile);
-    setLogoPreview(url);
-    return () => {
-      URL.revokeObjectURL(url);
-    };
   }, [logoFile]);
 
+  // load leaflet + react-leaflet + css only in client
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (typeof window === 'undefined') return;
+      try {
+        // inject leaflet CSS once (avoid dynamic CSS import type issues)
+        if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.dataset.leafletCss = '1';
+          try {
+            link.href = new URL('leaflet/dist/leaflet.css', import.meta.url).toString();
+          } catch {
+            link.href = '/node_modules/leaflet/dist/leaflet.css';
+          }
+          await new Promise<void>((resolve) => {
+            link.onload = () => resolve();
+            link.onerror = () => resolve();
+            document.head.appendChild(link);
+          });
+        }
+
+        const [leafletModule, reactLeafletModule] = await Promise.all([
+          import('leaflet'),
+          import('react-leaflet'),
+        ]);
+
+        // fix icon paths after leaflet loaded
+        try {
+          const L = leafletModule as any;
+          if (L && L.Icon && L.Icon.Default) {
+            try { delete L.Icon.Default.prototype._getIconUrl; } catch {}
+            L.Icon.Default.mergeOptions({
+              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+            });
+          }
+        } catch (err) {
+          console.warn('leaflet icon fix failed', err);
+        }
+
+        leafletRef.current = {
+          MapContainer: reactLeafletModule.MapContainer,
+          TileLayer: reactLeafletModule.TileLayer,
+          Marker: reactLeafletModule.Marker,
+          useMapEvents: reactLeafletModule.useMapEvents,
+        };
+
+        if (mounted) setLeafletReady(true);
+      } catch (err) {
+        console.error('failed loading leaflet/react-leaflet', err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Location picker component (client-only usage via dynamic loaded useMapEvents)
+  const LocationPicker = ({ onSet }: { onSet: (c: { lat: number; lng: number }) => void }) => {
+    const u = leafletRef.current?.useMapEvents;
+    if (!u) return null;
+    u({
+      click(e: any) {
+        onSet({ lat: e.latlng.lat, lng: e.latlng.lng });
+      },
+    });
+    return null;
+  };
+
   const validate = () => {
-    setMessage(null);
     if (isCompany && !companyName.trim()) {
       setMessage('الرجاء كتابة اسم الشركة');
       return false;
@@ -198,25 +250,28 @@ export default function Page() {
       let imageUrl: string | null = null;
       let logoUrl: string | null = null;
 
-      if (imageFile) {
-        imageUrl = await uploadToImgbb(imageFile);
+      if (imageFile) imageUrl = await uploadToImgbb(imageFile);
+      if (logoFile) logoUrl = await uploadToImgbb(logoFile);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData?.user;
+      if (!user) {
+        setMessage('تحتاج لتسجيل الدخول أولاً');
+        setLoading(false);
+        return;
       }
 
-      if (logoFile) {
-        logoUrl = await uploadToImgbb(logoFile);
-      }
-
-      const payload: any = {
+      const payload: CommPayload = {
         category,
         name: isCompany ? companyName.trim() : personName.trim(),
         phone: phone || null,
         is_company: isCompany,
-        company_logo: logoUrl,
-        image_url: imageUrl,
-        country,
-        province,
-        city,
-        address,
+        company_logo: logoUrl ?? null,
+        image_url: imageUrl ?? null,
+        country: country || null,
+        province: province || null,
+        city: city || null,
+        address: address || null,
         location_lat: coords?.lat ?? null,
         location_lng: coords?.lng ?? null,
         price: price || null,
@@ -224,18 +279,14 @@ export default function Page() {
         payment_code: paymentCode || null,
         payment_id: paymentId || null,
         approved: false,
+        created_by: user.id,
       };
 
       const { error } = await supabase.from('ads').insert([payload]);
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       setMessage('✅ تم حفظ الإعلان بنجاح. بانتظار الموافقة.');
-      setTimeout(() => {
-        router.push('/merchant');
-      }, 1200);
+      setTimeout(() => router.push('/merchant'), 1200);
     } catch (err: any) {
       console.error(err);
       setMessage('❌ حدث خطأ أثناء الحفظ: ' + (err?.message ?? String(err)));
@@ -250,7 +301,7 @@ export default function Page() {
       background: 'linear-gradient(180deg,#071226 0%, #08263a 100%)',
       padding: '20px',
       fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial',
-      color: '#e6eef8',
+      color: '#0b1220',
     } as React.CSSProperties,
     container: {
       maxWidth: 820,
@@ -357,8 +408,28 @@ export default function Page() {
               {coords ? <div style={{ fontSize: 13, color: '#bfeffd' }}>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</div> : null}
             </div>
             <div style={styles.mapWrap}>
-              {/* Client-only map; this avoids window being accessed during SSR */}
-              <ClientMap coords={coords} setCoords={(c: { lat: number; lng: number } | null) => setCoords(c)} />
+              {/* إذا لم تُحمّل مكتبات الخريطة بعد، نعرض رسالة أو بديل بسيط */}
+              {!leafletReady || !leafletRef.current ? (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bcdfe7', padding: 12 }}>
+                  تحميل مكوّن الخريطة...
+                </div>
+              ) : (
+                (() => {
+                  const { MapContainer, TileLayer, Marker } = leafletRef.current as any;
+                  return (
+                    <MapContainer
+                      whenCreated={(m: any) => { mapRef.current = m; setTimeout(() => { try { (m as any).invalidateSize(); } catch {} }, 120); }}
+                      center={[33.3128, 44.3615]}
+                      zoom={6}
+                      style={{ width: '100%', height: '100%' }}
+                    >
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                      <LocationPicker onSet={(c) => setCoords(c)} />
+                      {coords && <Marker position={[coords.lat, coords.lng]} />}
+                    </MapContainer>
+                  );
+                })()
+              )}
             </div>
             <div style={{ marginTop: 8, fontSize: 12, color: '#9fb3c9' }}>اضغط على الخريطة لاختيار الإحداثيات بدقة</div>
           </div>
