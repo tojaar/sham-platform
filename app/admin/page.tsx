@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 
-export default function AdminHubPage(): JSX.Element {
+export default function adminForm() {
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,#000000_0%,#071018_25%,_#03040a_60%)] text-white antialiased flex items-center justify-center p-6">
       <div className="relative w-full max-w-5xl">
