@@ -1,8 +1,8 @@
-// app/merchant/page.tsx
+// app/Merchant/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 import { supabase } from '@/lib/supabase';
 
 // قمنا بإزالة الاستيرادات المباشرة لِـ react-leaflet و leaflet و CSS هنا
@@ -87,7 +87,7 @@ const parseLocationString = (loc?: string | null) => {
 };
 
 export default function PostAdPage() {
-  const router = useRouter();
+ 
 
   // form state
   const [category, setCategory] = useState('cars');
@@ -286,7 +286,7 @@ export default function PostAdPage() {
       if (error) throw error;
 
       setMessage('✅ تم حفظ الإعلان بنجاح. بانتظار الموافقة.');
-      setTimeout(() => router.push('/merchant'), 1200);
+      
     } catch (err: any) {
       console.error(err);
       setMessage('❌ حدث خطأ أثناء الحفظ: ' + (err?.message ?? String(err)));
