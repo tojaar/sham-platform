@@ -1,22 +1,11 @@
+// app/search/comm/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 
-// fix Leaflet icons for bundlers
-if (typeof window !== 'undefined') {
-  try {
-    delete (L.Icon.Default as any).prototype._getIconUrl;
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-      iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-      shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-    });
-  } catch {}
-}
+// لم نعد نستورد react-leaflet أو leaflet عند مستوى الوحدة لتجنّب SSR error.
+// سنحمّلهما ديناميكياً داخل useEffect على المتصفح فقط.
 
 type Comm = {
   id: string;
@@ -37,6 +26,8 @@ type Comm = {
   status?: string | null;
   approved?: boolean | null;
   created_at?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
   [key: string]: any;
 };
 
@@ -65,9 +56,8 @@ const parseLocation = (loc?: string | null) => {
   }
 };
 
-// Map auto-fit helper when given coords
-function MapAutoCenter({ coords }: { coords: { lat: number; lng: number } | null }) {
-  const map = useMap();
+// MapAutoCenter component kept (will be used from react-leaflet once loaded)
+function MapAutoCenter({ map, coords }: { map: any; coords: { lat: number; lng: number } | null }) {
   useEffect(() => {
     if (!map || !coords) return;
     try {
@@ -94,6 +84,16 @@ export default function searchcommForm() {
   const [mapKey, setMapKey] = useState(0);
   const mapRef = useRef<any>(null);
 
+  // dynamic leaflet/react-leaflet state
+  const [LeafletLoaded, setLeafletLoaded] = useState(false);
+  const LeafletRef = useRef<{
+    MapContainer?: any;
+    TileLayer?: any;
+    Marker?: any;
+    Popup?: any;
+  } | null>(null);
+
+  // Load data
   const fetchComms = async () => {
     setLoading(true);
     setMessage(null);
@@ -118,6 +118,66 @@ export default function searchcommForm() {
 
   useEffect(() => {
     fetchComms();
+  }, []);
+
+  // dynamic import of leaflet + react-leaflet + CSS on client only
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (typeof window === 'undefined') return;
+      try {
+        // inject leaflet css only once (avoid TypeScript dynamic CSS import issue)
+        if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.dataset.leafletCss = '1';
+          // use import.meta.url to locate package asset during bundling
+          try {
+            link.href = new URL('leaflet/dist/leaflet.css', import.meta.url).toString();
+          } catch {
+            // fallback to package path (works in many setups)
+            link.href = '/node_modules/leaflet/dist/leaflet.css';
+          }
+          // append and wait for load (resolve even on error)
+          await new Promise<void>((resolve) => {
+            link.onload = () => resolve();
+            link.onerror = () => resolve();
+            document.head.appendChild(link);
+          });
+        }
+
+        const [leaflet, reactLeaflet] = await Promise.all([
+          import('leaflet'),
+          import('react-leaflet')
+        ]);
+
+        // fix Leaflet icons for bundlers (after leaflet loaded)
+        try {
+          const L = leaflet as any;
+          if (L && L.Icon && L.Icon.Default) {
+            try { delete L.Icon.Default.prototype._getIconUrl; } catch {}
+            L.Icon.Default.mergeOptions({
+              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+            });
+          }
+        } catch (err) {
+          console.warn('leaflet icon fix failed', err);
+        }
+
+        LeafletRef.current = {
+          MapContainer: reactLeaflet.MapContainer,
+          TileLayer: reactLeaflet.TileLayer,
+          Marker: reactLeaflet.Marker,
+          Popup: reactLeaflet.Popup,
+        };
+        if (mounted) setLeafletLoaded(true);
+      } catch (err) {
+        console.error('Failed to load leaflet/react-leaflet dynamically', err);
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   const countries = useMemo(() => {
@@ -413,6 +473,10 @@ export default function searchcommForm() {
                   const loc = parseLocation(selected.location ?? undefined)
                     ?? (selected.location_lat && selected.location_lng ? { lat: selected.location_lat, lng: selected.location_lng } : null);
                   if (loc) {
+                    if (!LeafletLoaded || !LeafletRef.current) {
+                      return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
+                    }
+                    const { MapContainer, TileLayer, Marker, Popup } = LeafletRef.current as any;
                     return (
                       <MapContainer
                         key={mapKey}
@@ -424,7 +488,7 @@ export default function searchcommForm() {
                         scrollWheelZoom={false}
                       >
                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-                        <MapAutoCenter coords={loc} />
+                        <MapAutoCenter map={mapRef.current} coords={loc} />
                         <Marker position={[loc.lat, loc.lng]}>
                           <Popup>
                             {selected.title ?? 'موقع'} <br /> {selected.address ?? ''}
