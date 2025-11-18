@@ -44,7 +44,7 @@ const toCSV = (rows: any[]) => {
   return csv.join('\n');
 };
 
-export default function adminpostForm() {
+export default function AdminPostForm() {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
