@@ -31,7 +31,7 @@ type Member = {
 
 type ViewMode = 'table' | 'cards' | 'hierarchy';
 
-export default function adminproducerForm() {
+export default function AdminProducerForm() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
