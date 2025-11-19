@@ -68,7 +68,7 @@ function MapAutoCenter({ map, coords }: { map: any; coords: { lat: number; lng: 
   return null;
 }
 
-export default function searchcommForm() {
+export default function SearchCommForm() {
   const [comms, setComms] = useState<Comm[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

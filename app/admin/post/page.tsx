@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -9,15 +9,44 @@ import L from 'leaflet';
 // fix leaflet icons for bundlers
 if (typeof window !== 'undefined') {
   try {
+    // لا نستخدم any: نحدد النوع بشكل آمن ونعلّق إذا لازم
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (L.Icon.Default as any).prototype._getIconUrl;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
       iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
       shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
     });
-  } catch {}
+  } catch {
+    // تجاهل أي خطأ غير متوقع
+  }
 }
 
+// نوع إعلان بسيط يغطي الحقول المستخدمة هنا
+type Ad = {
+  id: string;
+  name?: string;
+  description?: string;
+  category?: string;
+  country?: string;
+  province?: string;
+  city?: string;
+  phone?: string;
+  payment_code?: string;
+  payment_id?: string;
+  price?: number | string | null;
+  image_url?: string;
+  company_logo?: string;
+  created_by?: string;
+  created_at?: string | Date;
+  approved?: boolean | null;
+  address?: string;
+  is_company?: boolean;
+  location_lat?: number | '' | null;
+  location_lng?: number | '' | null;
+};
+
+// مكوّن مساعد لتعيين الإحداثيات بالنقر على الخريطة
 function MapClick({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
   useMapEvents({
     click(e) {
@@ -27,122 +56,143 @@ function MapClick({ setCoords }: { setCoords: (c: { lat: number; lng: number }) 
   return null;
 }
 
-const toCSV = (rows: any[]) => {
+// دالة تحويل مصفوفة كائنات إلى CSV بدون any
+const toCSV = (rows: Array<Record<string, unknown>>): string => {
   if (!rows || rows.length === 0) return '';
   const keys = Object.keys(rows[0]);
-  const csv = [keys.join(',')].concat(
-    rows.map((r) =>
+  const header = keys.join(',');
+  const body = rows
+    .map((r) =>
       keys
         .map((k) => {
           const v = r[k] ?? '';
           const s = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
+          // نغلف بالقوسين المزدوجين لحماية الفواصل
           return "${s}";
         })
         .join(',')
     )
-  );
-  return csv.join('\n');
+    .join('\n');
+  return `${header}\n${body};`
 };
 
 export default function AdminPostForm() {
-  const [posts, setPosts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [posts, setPosts] = useState<Ad[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState<string>('');
   const [filter, setFilter] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table' | 'compact'>('cards');
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState<number>(1);
   const perPage = 18;
 
   const [editId, setEditId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<any>({});
-  const [mapKey, setMapKey] = useState(0);
-  const mapRef = useRef<any>(null);
+  const [editData, setEditData] = useState<Partial<Ad>>({});
+  const [mapKey, setMapKey] = useState<number>(0);
+  const mapRef = useRef<L.Map | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
-      const { data, error } = await supabase.from('ads').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('ads')
+        .select('*')
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      setPosts((data || []) as any[]);
-    } catch (err: any) {
-      setMessage('خطأ في جلب الإعلانات: ' + (err?.message ?? String(err)));
+      setPosts((data ?? []) as Ad[]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage('خطأ في جلب الإعلانات: ' + msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchPosts();
-  }, []);
+  }, [fetchPosts]);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     await fetchPosts();
     setSelectedIds({});
-  };
+  }, [fetchPosts]);
 
-  const handleAction = async (id: string, action: 'approve' | 'reject' | 'delete') => {
-    setMessage(null);
-    try {
-      if (action === 'delete') {
-        const { error } = await supabase.from('ads').delete().eq('id', id);
-        if (error) throw error;
-      } else {
-        const status = action === 'approve' ? true : false;
-        const { error } = await supabase.from('ads').update({ approved: status }).eq('id', id);
-        if (error) throw error;
+  const handleAction = useCallback(
+    async (id: string, action: 'approve' | 'reject' | 'delete') => {
+      setMessage(null);
+      try {
+        if (action === 'delete') {
+          const { error } = await supabase.from('ads').delete().eq('id', id);
+          if (error) throw error;
+        } else {
+          const status = action === 'approve';
+          const { error } = await supabase.from('ads').update({ approved: status }).eq('id', id);
+          if (error) throw error;
+        }
+        await refresh();
+        setMessage(
+          action === 'delete'
+            ? 'تم حذف الإعلان'
+            : action === 'approve'
+            ? 'تم قبول الإعلان'
+            : 'تم رفض الإعلان'
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setMessage('فشل الإجراء: ' + msg);
       }
-      await refresh();
-      setMessage(action === 'delete' ? 'تم حذف الإعلان' : action === 'approve' ? 'تم قبول الإعلان' : 'تم رفض الإعلان');
-    } catch (err: any) {
-      setMessage('فشل الإجراء: ' + (err?.message ?? String(err)));
-    }
-  };
+    },
+    [refresh]
+  );
 
-  const bulkAction = async (action: 'approve' | 'reject' | 'delete') => {
-    const ids = Object.keys(selectedIds).filter((k) => selectedIds[k]);
-    if (ids.length === 0) {
-      setMessage('حدد إعلانات لتنفيذ الإجراء الجماعي');
-      return;
-    }
-    setMessage(null);
-    setLoading(true);
-    try {
-      if (action === 'delete') {
-        const { error } = await supabase.from('ads').delete().in('id', ids);
-        if (error) throw error;
-      } else {
-        const status = action === 'approve' ? true : false;
-        const { error } = await supabase.from('ads').update({ approved: status }).in('id', ids);
-        if (error) throw error;
+  const bulkAction = useCallback(
+    async (action: 'approve' | 'reject' | 'delete') => {
+      const ids = Object.keys(selectedIds).filter((k) => selectedIds[k]);
+      if (ids.length === 0) {
+        setMessage('حدد إعلانات لتنفيذ الإجراء الجماعي');
+        return;
       }
-      await refresh();
-      setMessage(`تم تنفيذ ${action} على ${ids.length} إعلان`);
-    } catch (err: any) {
-      setMessage('فشل الإجراء الجماعي: ' + (err?.message ?? String(err)));
-    } finally {
-      setLoading(false);
-    }
-  };
+      setMessage(null);
+      setLoading(true);
+      try {
+        if (action === 'delete') {
+          const { error } = await supabase.from('ads').delete().in('id', ids);
+          if (error) throw error;
+        } else {
+          const status = action === 'approve';
+          const { error } = await supabase.from('ads').update({ approved: status }).in('id', ids);
+          if (error) throw error;
+        }
+        await refresh();
+        setMessage(`تم تنفيذ ${action} على ${ids.length} إعلان`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setMessage('فشل الإجراء الجماعي: ' + msg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedIds, refresh]
+  );
 
-  const handleEdit = (item: any) => {
+  const handleEdit = useCallback((item: Ad) => {
     setEditId(item.id);
     setEditData({
       ...item,
-      location_lat: item.location_lat ?? item.lat ?? null,
-      location_lng: item.location_lng ?? item.lng ?? null,
+      location_lat: item.location_lat ?? (item as unknown as { lat?: number }).lat ?? null,
+      location_lng: item.location_lng ?? (item as unknown as { lng?: number }).lng ?? null,
     });
     setMapKey((k) => k + 1);
     setMessage(null);
-  };
+  }, []);
 
-  const saveEdit = async () => {
+  const saveEdit = useCallback(async () => {
     if (!editId) return;
     setMessage(null);
     setLoading(true);
@@ -155,12 +205,13 @@ export default function AdminPostForm() {
       setEditId(null);
       await refresh();
       setMessage('تم حفظ التعديلات');
-    } catch (err: any) {
-      setMessage('خطأ عند الحفظ: ' + (err?.message ?? String(err)));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage('خطأ عند الحفظ: ' + msg);
     } finally {
       setLoading(false);
     }
-  };
+  }, [editData, editId, refresh]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -185,7 +236,7 @@ export default function AdminPostForm() {
           p.payment_code,
           p.payment_id,
         ];
-        return fields.some((f: any) => (f ?? '').toString().toLowerCase().includes(q));
+        return fields.some((f) => (f ?? '').toString().toLowerCase().includes(q));
       });
   }, [posts, search, filter, categoryFilter]);
 
@@ -202,8 +253,8 @@ export default function AdminPostForm() {
     return filtered.slice(start, start + perPage);
   }, [filtered, page]);
 
-  const exportCSV = () => {
-    const csv = toCSV(filtered);
+  const exportCSV = useCallback(() => {
+    const csv = toCSV(filtered as Array<Record<string, unknown>>);
     if (!csv) {
       setMessage('لا توجد بيانات للتصدير');
       return;
@@ -215,19 +266,19 @@ export default function AdminPostForm() {
     a.download = `ads_export_${new Date().toISOString()}.csv;`
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [filtered]);
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((s) => ({ ...s, [id]: !s[id] }));
-  };
+  }, []);
 
-  const setEditCoords = (c: { lat: number; lng: number }) => {
-    setEditData((d: any) => ({ ...d, location_lat: c.lat, location_lng: c.lng }));
-  };
+  const setEditCoords = useCallback((c: { lat: number; lng: number }) => {
+    setEditData((d) => ({ ...d, location_lat: c.lat, location_lng: c.lng }));
+  }, []);
 
-  const fmt = (v: any) => {
+  const fmt = (v: unknown): string => {
     try {
-      return new Date(v).toLocaleString();
+      return new Date(v as string).toLocaleString();
     } catch {
       return String(v);
     }
@@ -256,7 +307,9 @@ export default function AdminPostForm() {
               className="px-3 py-2 bg-gray-900 border border-cyan-500 rounded"
               value={filter}
               onChange={(e) => {
-                setFilter(e.target.value as any);
+                // نحافظ على النوع الضيق
+                const v = e.target.value as 'all' | 'approved' | 'pending' | 'rejected';
+                setFilter(v);
                 setPage(1);
               }}
             >
@@ -281,13 +334,22 @@ export default function AdminPostForm() {
 
           <div className="flex gap-2 items-center">
             <div className="flex gap-2">
-              <button onClick={() => setViewMode('cards')} className={`px-3 py-2 rounded ${viewMode === 'cards' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`px-3 py-2 rounded ${viewMode === 'cards' ? 'bg-cyan-600' : 'bg-gray-800'}`}
+              >
                 بطاقات
               </button>
-              <button onClick={() => setViewMode('table')} className={`px-3 py-2 rounded ${viewMode === 'table' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-2 rounded ${viewMode === 'table' ? 'bg-cyan-600' : 'bg-gray-800'}`}
+              >
                 جدول
               </button>
-              <button onClick={() => setViewMode('compact')} className={`px-3 py-2 rounded ${viewMode === 'compact' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
+              <button
+                onClick={() => setViewMode('compact')}
+                className={`px-3 py-2 rounded ${viewMode === 'compact' ? 'bg-cyan-600' : 'bg-gray-800'}`}
+              >
                 مصغّر
               </button>
             </div>
@@ -338,6 +400,7 @@ export default function AdminPostForm() {
                       <div className="text-xs text-gray-400">{item.created_by}</div>
                       <div className="mt-1">
                         {item.company_logo ? (
+                          // إبقاء <img> للحفاظ على الشكل كما طلبت
                           <img src={item.company_logo} alt="logo" className="w-12 h-12 object-contain rounded" />
                         ) : null}
                       </div>
@@ -347,11 +410,15 @@ export default function AdminPostForm() {
                     <td className="p-2">{item.phone ?? '—'}</td>
                     <td className="p-2 text-xs">
                       {item.country ?? '—'} / {item.province ?? '—'} / {item.city ?? '—'}
-                      <div className="mt-1 text-xxs">{`item.location_lat ? lat ${item.location_lat}, lng ${item.location_lng} : 'بدون إحداثيات'`}</div>
+                      <div className="mt-1 text-xxs">
+                        {item.location_lat && item.location_lng
+                          ? `lat ${item.location_lat}, lng ${item.location_lng}`
+                          : 'بدون إحداثيات'}
+                      </div>
                     </td>
                     <td className="p-2 text-xs">{item.payment_code ?? '—'} / {item.payment_id ?? '—'}</td>
                     <td className="p-2">{item.approved === true ? '✅' : item.approved === false ? '❌' : '⏳'}</td>
-                    <td className="p-2">{fmt(item.created_at)}</td>
+                    <td className="p-2">{fmt(item.created_at ?? '')}</td>
                     <td className="p-2 flex gap-2">
                       <button onClick={() => handleAction(item.id, 'approve')} className="px-2 py-1 bg-green-600 rounded text-sm">قبول</button>
                       <button onClick={() => handleAction(item.id, 'reject')} className="px-2 py-1 bg-yellow-500 rounded text-sm">رفض</button>
@@ -394,7 +461,7 @@ export default function AdminPostForm() {
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
                       <h2 className="text-lg font-semibold text-cyan-300">{item.name}</h2>
-                      <div className="text-xs text-gray-400">{fmt(item.created_at)}</div>
+                      <div className="text-xs text-gray-400">{fmt(item.created_at ?? '')}</div>
                     </div>
 
                     <div className="text-sm text-gray-300 mt-2 space-y-1">
@@ -498,14 +565,24 @@ export default function AdminPostForm() {
               <input
                 type="number"
                 value={editData.location_lat ?? ''}
-                onChange={(e) => setEditData({ ...editData, location_lat: e.target.value === '' ? '' : parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    location_lat: e.target.value === '' ? '' : parseFloat(e.target.value),
+                  })
+                }
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="Latitude"
               />
               <input
                 type="number"
                 value={editData.location_lng ?? ''}
-                onChange={(e) => setEditData({ ...editData, location_lng: e.target.value === '' ? '' : parseFloat(e.target.value) })}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    location_lng: e.target.value === '' ? '' : parseFloat(e.target.value),
+                  })
+                }
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="Longitude"
               />
@@ -560,10 +637,20 @@ export default function AdminPostForm() {
             <div className="mt-4">
               <div className="text-sm text-gray-300 mb-2">تحرير الموقع تفاعليًا (انقر على الخريطة لتعيين الإحداثيات)</div>
               <div className="w-full h-60 rounded overflow-hidden border border-cyan-600">
-                <MapContainer key={mapKey} center={[editData.location_lat ?? 33.3128, editData.location_lng ?? 44.3615]} zoom={editData.location_lat ? 13 : 6} style={{ width: '100%', height: '100%' }}>
+                <MapContainer
+                  key={mapKey}
+                  center={[editData.location_lat ?? 33.3128, editData.location_lng ?? 44.3615]}
+                  zoom={editData.location_lat ? 13 : 6}
+                  style={{ width: '100%', height: '100%' }}
+                  whenCreated={(map) => {
+                    mapRef.current = map;
+                  }}
+                >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
-                  {editData.location_lat && editData.location_lng && <Marker position={[editData.location_lat, editData.location_lng]} />}
+                  {editData.location_lat && editData.location_lng && (
+                    <Marker position={[Number(editData.location_lat), Number(editData.location_lng)]} />
+                  )}
                 </MapContainer>
               </div>
             </div>
@@ -574,8 +661,7 @@ export default function AdminPostForm() {
             </div>
           </div>
         </div>
-      )}
-
+       )}
     </main>
   );
 }

@@ -32,7 +32,7 @@ type Seeker = {
   [key: string]: any;
 };
 
-export default function adminseekerForm() {
+export default function AdminSeekerForm() {
   const [rows, setRows] = useState<Seeker[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
