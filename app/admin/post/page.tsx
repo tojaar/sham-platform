@@ -2,7 +2,9 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
+import type { Map as LeafletMap } from 'leaflet';
 
 // Client-only map components
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
@@ -15,8 +17,9 @@ const MapClick = dynamic(
     const mod = await import('react-leaflet');
     const { useMapEvents } = mod;
     return function MapClickClient({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // use the proper Leaflet event type at runtime; dynamic import ensures client-only
       useMapEvents({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         click(e: any) {
           setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
         },
@@ -26,8 +29,6 @@ const MapClick = dynamic(
   },
   { ssr: false }
 );
-
-import type { Map as LeafletMap } from 'leaflet';
 
 // CDN for leaflet CSS (change if you host differently)
 const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
@@ -49,7 +50,7 @@ type Ad = {
   company_logo?: string;
   created_by?: string;
   created_at?: string | Date;
-   approved?: boolean | null;
+  approved?: boolean | null;
   is_company?: boolean;
   location_lat?: number | '' | null;
   location_lng?: number | '' | null;
@@ -65,8 +66,8 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
-           const s = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
-          return "${s}";
+          const safe = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
+          return "${safe}";
         })
         .join(',')
     )
@@ -111,15 +112,18 @@ export default function AdminPostForm() {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           delete (L.Icon.Default as any).prototype._getIconUrl;
-        } catch {}
+        } catch {
+          // ignore
+        }
         L.Icon.Default.mergeOptions({
           iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
           iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
           shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
         });
       } catch (err) {
-        // silent: do not break admin area if leaflet fails to load
-        // console.warn('Leaflet load failed', err);
+        // do not break admin area if leaflet fails
+        // eslint-disable-next-line no-console
+        console.warn('Leaflet load failed', err);
       }
     })();
   }, []);
@@ -134,6 +138,8 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ في جلب الإعلانات: ' + msg);
+      // eslint-disable-next-line no-console
+      console.warn(err);
     } finally {
       setLoading(false);
     }
@@ -165,6 +171,8 @@ export default function AdminPostForm() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء: ' + msg);
+        // eslint-disable-next-line no-console
+        console.warn(err);
       }
     },
     [refresh]
@@ -189,10 +197,12 @@ export default function AdminPostForm() {
           if (error) throw error;
         }
         await refresh();
-        setMessage(`تم تنفيذ ${action} على ${ids.length} إعلان`);
+        setMessage(`م تنفيذ ${action} على ${ids.length} إعلان`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء الجماعي: ' + msg);
+        // eslint-disable-next-line no-console
+        console.warn(err);
       } finally {
         setLoading(false);
       }
@@ -227,6 +237,8 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ عند الحفظ: ' + msg);
+      // eslint-disable-next-line no-console
+      console.warn(err);
     } finally {
       setLoading(false);
     }
@@ -325,7 +337,7 @@ export default function AdminPostForm() {
             <select
               className="px-3 py-2 bg-gray-900 border border-cyan-500 rounded"
               value={filter}
-               onChange={(e) => {
+              onChange={(e) => {
                 const v = e.target.value as 'all' | 'approved' | 'pending' | 'rejected';
                 setFilter(v);
                 setPage(1);
@@ -408,7 +420,11 @@ export default function AdminPostForm() {
                       <div className="font-semibold text-cyan-300">{item.name}</div>
                       <div className="text-xs text-gray-400">{item.created_by}</div>
                       <div className="mt-1">
-                        {item.company_logo ? <img src={item.company_logo} alt="logo" className="w-12 h-12 object-contain rounded" /> : null}
+                        {item.company_logo ? (
+                          <div className="w-12 h-12 relative">
+                            <Image src={item.company_logo} alt="logo" fill style={{ objectFit: 'contain' }} />
+                          </div>
+                        ) : null}
                       </div>
                     </td>
                     <td className="p-2">{item.category}</td>
@@ -457,7 +473,13 @@ export default function AdminPostForm() {
               <div key={item.id} className="bg-gray-900 border border-cyan-700 rounded-lg p-4 shadow-lg">
                 <div className="flex items-start gap-3">
                   <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify-center">
-                    {item.image_url ? <img src={item.image_url} alt="img" className="w-full h-full object-cover" /> : <div className="text-xs text-gray-400 p-2">لا صورة</div>}
+                    {item.image_url ? (
+                      <div className="relative w-16 h-16">
+                        <Image src={item.image_url} alt="img" fill style={{ objectFit: 'cover' }} />
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 p-2">لا صورة</div>
+                    )}
                   </div>
 
                   <div className="flex-1">
@@ -556,7 +578,7 @@ export default function AdminPostForm() {
                 onChange={(e) => setEditData({ ...editData, address: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="العنوان"
-                />
+              />
               <input
                 value={editData.phone ?? ''}
                 onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
@@ -604,7 +626,7 @@ export default function AdminPostForm() {
               placeholder="الوصف الكامل"
               rows={4}
             ></textarea>
- 
+
             <div className="mt-4">
               <div className="text-sm text-gray-300 mb-2">تحرير الموقع تفاعليًا (انقر على الخريطة لتعيين الإحداثيات)</div>
               <div className="w-full h-60 rounded overflow-hidden border border-cyan-600">
