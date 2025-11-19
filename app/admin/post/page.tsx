@@ -1,28 +1,37 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 
-// fix leaflet icons for bundlers
-if (typeof window !== 'undefined') {
-  try {
-    // لا نستخدم any: نحدد النوع بشكل آمن ونعلّق إذا لازم
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (L.Icon.Default as any).prototype._getIconUrl;
-    L.Icon.Default.mergeOptions({
-      iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-      iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-      shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-    });
-  } catch {
-    // تجاهل أي خطأ غير متوقع
-  }
-}
+// Client-only map components
+const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
+const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
 
-// نوع إعلان بسيط يغطي الحقول المستخدمة هنا
+// MapClick dynamic component that imports useMapEvents on client only
+const MapClick = dynamic(
+  async () => {
+    const mod = await import('react-leaflet');
+    const { useMapEvents } = mod;
+    return function MapClickClient({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      useMapEvents({
+        click(e: any) {
+          setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+        },
+      });
+      return null;
+    };
+  },
+  { ssr: false }
+);
+
+import type { Map as LeafletMap } from 'leaflet';
+
+// CDN for leaflet CSS (change if you host differently)
+const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+
 type Ad = {
   id: string;
   name?: string;
@@ -31,6 +40,7 @@ type Ad = {
   country?: string;
   province?: string;
   city?: string;
+  address?: string;
   phone?: string;
   payment_code?: string;
   payment_id?: string;
@@ -39,24 +49,13 @@ type Ad = {
   company_logo?: string;
   created_by?: string;
   created_at?: string | Date;
-  approved?: boolean | null;
-  address?: string;
+   approved?: boolean | null;
   is_company?: boolean;
   location_lat?: number | '' | null;
   location_lng?: number | '' | null;
 };
 
-// مكوّن مساعد لتعيين الإحداثيات بالنقر على الخريطة
-function MapClick({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
-  useMapEvents({
-    click(e) {
-      setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-    },
-  });
-  return null;
-}
-
-// دالة تحويل مصفوفة كائنات إلى CSV بدون any
+// helper to CSV
 const toCSV = (rows: Array<Record<string, unknown>>): string => {
   if (!rows || rows.length === 0) return '';
   const keys = Object.keys(rows[0]);
@@ -66,8 +65,7 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
-          const s = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
-          // نغلف بالقوسين المزدوجين لحماية الفواصل
+           const s = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
           return "${s}";
         })
         .join(',')
@@ -92,18 +90,45 @@ export default function AdminPostForm() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<Ad>>({});
   const [mapKey, setMapKey] = useState<number>(0);
-  const mapRef = useRef<L.Map | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+
+  // Load leaflet CSS via <link> and fix icons on client only
+  useEffect(() => {
+    (async () => {
+      if (typeof window === 'undefined') return;
+      try {
+        if (!document.querySelector('link[data-leaflet-css]')) {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = LEAFLET_CSS_URL;
+          link.setAttribute('data-leaflet-css', '1');
+          document.head.appendChild(link);
+        }
+
+        const L = await import('leaflet');
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delete (L.Icon.Default as any).prototype._getIconUrl;
+        } catch {}
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+          iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+          shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+        });
+      } catch (err) {
+        // silent: do not break admin area if leaflet fails to load
+        // console.warn('Leaflet load failed', err);
+      }
+    })();
+  }, []);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
-      const { data, error } = await supabase
-        .from('ads')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('ads').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       setPosts((data ?? []) as Ad[]);
     } catch (err) {
@@ -136,13 +161,7 @@ export default function AdminPostForm() {
           if (error) throw error;
         }
         await refresh();
-        setMessage(
-          action === 'delete'
-            ? 'تم حذف الإعلان'
-            : action === 'approve'
-            ? 'تم قبول الإعلان'
-            : 'تم رفض الإعلان'
-        );
+        setMessage(action === 'delete' ? 'تم حذف الإعلان' : action === 'approve' ? 'تم قبول الإعلان' : 'تم رفض الإعلان');
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء: ' + msg);
@@ -185,8 +204,8 @@ export default function AdminPostForm() {
     setEditId(item.id);
     setEditData({
       ...item,
-      location_lat: item.location_lat ?? (item as unknown as { lat?: number }).lat ?? null,
-      location_lng: item.location_lng ?? (item as unknown as { lng?: number }).lng ?? null,
+      location_lat: item.location_lat ?? null,
+      location_lng: item.location_lng ?? null,
     });
     setMapKey((k) => k + 1);
     setMessage(null);
@@ -197,7 +216,7 @@ export default function AdminPostForm() {
     setMessage(null);
     setLoading(true);
     try {
-      const payload = { ...editData };
+      const payload = { ...editData } as Record<string, unknown>;
       if (payload.location_lat === '') payload.location_lat = null;
       if (payload.location_lng === '') payload.location_lng = null;
       const { error } = await supabase.from('ads').update(payload).eq('id', editId);
@@ -232,7 +251,7 @@ export default function AdminPostForm() {
           p.country,
           p.province,
           p.city,
-          p.phone, // include phone in search
+          p.phone,
           p.payment_code,
           p.payment_id,
         ];
@@ -306,8 +325,7 @@ export default function AdminPostForm() {
             <select
               className="px-3 py-2 bg-gray-900 border border-cyan-500 rounded"
               value={filter}
-              onChange={(e) => {
-                // نحافظ على النوع الضيق
+               onChange={(e) => {
                 const v = e.target.value as 'all' | 'approved' | 'pending' | 'rejected';
                 setFilter(v);
                 setPage(1);
@@ -334,22 +352,13 @@ export default function AdminPostForm() {
 
           <div className="flex gap-2 items-center">
             <div className="flex gap-2">
-              <button
-                onClick={() => setViewMode('cards')}
-                className={`px-3 py-2 rounded ${viewMode === 'cards' ? 'bg-cyan-600' : 'bg-gray-800'}`}
-              >
+              <button onClick={() => setViewMode('cards')} className={`px-3 py-2 rounded ${viewMode === 'cards' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
                 بطاقات
               </button>
-              <button
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-2 rounded ${viewMode === 'table' ? 'bg-cyan-600' : 'bg-gray-800'}`}
-              >
+              <button onClick={() => setViewMode('table')} className={`px-3 py-2 rounded ${viewMode === 'table' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
                 جدول
               </button>
-              <button
-                onClick={() => setViewMode('compact')}
-                className={`px-3 py-2 rounded ${viewMode === 'compact' ? 'bg-cyan-600' : 'bg-gray-800'}`}
-              >
+              <button onClick={() => setViewMode('compact')} className={`px-3 py-2 rounded ${viewMode === 'compact' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
                 مصغّر
               </button>
             </div>
@@ -399,10 +408,7 @@ export default function AdminPostForm() {
                       <div className="font-semibold text-cyan-300">{item.name}</div>
                       <div className="text-xs text-gray-400">{item.created_by}</div>
                       <div className="mt-1">
-                        {item.company_logo ? (
-                          // إبقاء <img> للحفاظ على الشكل كما طلبت
-                          <img src={item.company_logo} alt="logo" className="w-12 h-12 object-contain rounded" />
-                        ) : null}
+                        {item.company_logo ? <img src={item.company_logo} alt="logo" className="w-12 h-12 object-contain rounded" /> : null}
                       </div>
                     </td>
                     <td className="p-2">{item.category}</td>
@@ -410,11 +416,7 @@ export default function AdminPostForm() {
                     <td className="p-2">{item.phone ?? '—'}</td>
                     <td className="p-2 text-xs">
                       {item.country ?? '—'} / {item.province ?? '—'} / {item.city ?? '—'}
-                      <div className="mt-1 text-xxs">
-                        {item.location_lat && item.location_lng
-                          ? `lat ${item.location_lat}, lng ${item.location_lng}`
-                          : 'بدون إحداثيات'}
-                      </div>
+                      <div className="mt-1 text-xxs">{item.location_lat && item.location_lng ? `lat ${item.location_lat}, lng ${item.location_lng} `: 'بدون إحداثيات'}</div>
                     </td>
                     <td className="p-2 text-xs">{item.payment_code ?? '—'} / {item.payment_id ?? '—'}</td>
                     <td className="p-2">{item.approved === true ? '✅' : item.approved === false ? '❌' : '⏳'}</td>
@@ -554,8 +556,7 @@ export default function AdminPostForm() {
                 onChange={(e) => setEditData({ ...editData, address: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="العنوان"
-              />
-              {/* PHONE FIELD IN EDIT */}
+                />
               <input
                 value={editData.phone ?? ''}
                 onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
@@ -603,48 +604,22 @@ export default function AdminPostForm() {
               placeholder="الوصف الكامل"
               rows={4}
             ></textarea>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="text-xs text-gray-300">صورة الإعلان</label>
-                <input
-                  type="text"
-                  value={editData.image_url ?? ''}
-                  onChange={(e) => setEditData({ ...editData, image_url: e.target.value })}
-                  className="w-full p-2 mt-1 bg-gray-800 border border-cyan-500 rounded"
-                  placeholder="رابط الصورة"
-                />
-                <div className="mt-2 w-40 h-28 bg-[#06121a] rounded overflow-hidden flex items-center justify-center">
-                  {editData.image_url ? <img src={editData.image_url} alt="img" className="w-full h-full object-contain" /> : <div className="text-xs text-gray-500">لا صورة</div>}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-300">شعار الشركة</label>
-                <input
-                  type="text"
-                  value={editData.company_logo ?? ''}
-                  onChange={(e) => setEditData({ ...editData, company_logo: e.target.value })}
-                  className="w-full p-2 mt-1 bg-gray-800 border border-cyan-500 rounded"
-                  placeholder="رابط الشعار"
-                />
-                <div className="mt-2 w-40 h-28 bg-[#06121a] rounded overflow-hidden flex items-center justify-center">
-                  {editData.company_logo ? <img src={editData.company_logo} alt="logo" className="w-full h-full object-contain" /> : <div className="text-xs text-gray-500">لا شعار</div>}
-                </div>
-              </div>
-            </div>
-
+ 
             <div className="mt-4">
               <div className="text-sm text-gray-300 mb-2">تحرير الموقع تفاعليًا (انقر على الخريطة لتعيين الإحداثيات)</div>
               <div className="w-full h-60 rounded overflow-hidden border border-cyan-600">
                 <MapContainer
                   key={mapKey}
-                  center={[editData.location_lat ?? 33.3128, editData.location_lng ?? 44.3615]}
+                  center={[
+                    editData.location_lat !== '' && editData.location_lat != null ? Number(editData.location_lat) : 33.3128,
+                    editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
+                  ]}
                   zoom={editData.location_lat ? 13 : 6}
                   style={{ width: '100%', height: '100%' }}
-                  whenCreated={(map) => {
-                    mapRef.current = map;
-                  }}
+                  // @ts-ignore
+whenCreated={(map) => {
+  mapRef.current = map;
+}}
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
@@ -661,7 +636,7 @@ export default function AdminPostForm() {
             </div>
           </div>
         </div>
-       )}
+      )}
     </main>
   );
 }
