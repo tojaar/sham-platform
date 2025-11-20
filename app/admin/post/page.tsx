@@ -2,14 +2,16 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
 
-// Map components (client-only)
+// Client-only map components
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
 
+// MapClick dynamic component typed with LeafletMouseEvent
 const MapClick = dynamic(
   async () => {
     const mod = await import('react-leaflet');
@@ -51,7 +53,7 @@ type Ad = {
   location_lng?: number | '' | null;
 };
 
-// helper: convert rows to CSV
+// helper: convert rows to CSV (escaped values inline to avoid unused-variable warnings)
 const toCSV = (rows: Array<Record<string, unknown>>): string => {
   if (!rows || rows.length === 0) return '';
   const keys = Object.keys(rows[0]);
@@ -61,8 +63,8 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const value = r[k] ?? '';
-          const escapedValue = typeof value === 'string' ? value.replace(/"/g, '""') : String(value);
-          return "${escapedValue}";
+          const escaped = typeof value === 'string' ? value.replace(/"/g, '""') : String(value);
+          return "${escaped}";
         })
         .join(',')
     )
@@ -90,43 +92,42 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // Load leaflet CSS and configure default icon safely
+  // Safely load Leaflet CSS and set default icons if available
   useEffect(() => {
     (async () => {
       if (typeof window === 'undefined') return;
-
-      // inject CSS if missing
-      if (!document.querySelector('link[data-leaflet-css]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = LEAFLET_CSS_URL;
-        link.setAttribute('data-leaflet-css', '1');
-        document.head.appendChild(link);
-      }
-
       try {
+        if (!document.querySelector('link[data-leaflet-css]')) {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = LEAFLET_CSS_URL;
+          link.setAttribute('data-leaflet-css', '1');
+          document.head.appendChild(link);
+        }
+
         const LModule = await import('leaflet');
 
-        // Only attempt to set default icon URLs if Icon and Icon.Default exist
-        if (LModule && (LModule as unknown as { Icon?: unknown }).Icon) {
-          const IconCtor = (LModule as unknown as { Icon?: unknown }).Icon as any;
-          if (IconCtor && IconCtor.Default) {
-            try {
-              // set sensible defaults pointing at leaflet package images
-              IconCtor.Default.mergeOptions({
-                iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-                iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-                shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-              });
-            } catch (mergeErr) {
-              // non-fatal if mergeOptions isn't present
-              // eslint-disable-next-line no-console
-              console.warn('Leaflet mergeOptions failed', mergeErr);
-            }
+        // Use a narrow type for Icon to avoid any
+        const iconContainer = (LModule as unknown) as {
+          Icon?: {
+            Default?: {
+              mergeOptions?: (opts: Record<string, string>) => void;
+            };
+          };
+        };
+
+        if (iconContainer && iconContainer.Icon && iconContainer.Icon.Default && typeof iconContainer.Icon.Default.mergeOptions === 'function') {
+          try {
+            iconContainer.Icon.Default.mergeOptions({
+              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+            });
+          } catch (mergeErr) {
+            console.warn('Leaflet mergeOptions failed', mergeErr);
           }
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn('Leaflet load failed', err);
       }
     })();
@@ -142,7 +143,6 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ في جلب الإعلانات: ' + msg);
-      // eslint-disable-next-line no-console
       console.warn(err);
     } finally {
       setLoading(false);
@@ -175,7 +175,6 @@ export default function AdminPostForm() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء: ' + msg);
-        // eslint-disable-next-line no-console
         console.warn(err);
       }
     },
@@ -205,7 +204,6 @@ export default function AdminPostForm() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء الجماعي: ' + msg);
-        // eslint-disable-next-line no-console
         console.warn(err);
       } finally {
         setLoading(false);
@@ -241,7 +239,6 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ عند الحفظ: ' + msg);
-      // eslint-disable-next-line no-console
       console.warn(err);
     } finally {
       setLoading(false);
@@ -425,7 +422,7 @@ export default function AdminPostForm() {
                       <div className="text-xs text-gray-400">{item.created_by}</div>
                       <div className="mt-1">
                         {item.company_logo ? (
-                          <div className="w-12 h-12 overflow-hidden rounded">
+                          <div className="w-12 h-12 relative overflow-hidden rounded">
                             <img src={item.company_logo} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                           </div>
                         ) : null}
@@ -641,7 +638,6 @@ export default function AdminPostForm() {
                     editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
-                  style={{ width: '100%', height: '100%' }}
                   // @ts-ignore
 whenCreated={(map) => {
   mapRef.current = map;
