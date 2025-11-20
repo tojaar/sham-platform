@@ -2,16 +2,14 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
 
-// Client-only map components
+// Map components (client-only)
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
 
-// MapClick dynamic component typed with LeafletMouseEvent
 const MapClick = dynamic(
   async () => {
     const mod = await import('react-leaflet');
@@ -92,39 +90,43 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
+  // Load leaflet CSS and configure default icon safely
   useEffect(() => {
     (async () => {
       if (typeof window === 'undefined') return;
-      try {
-        if (!document.querySelector('link[data-leaflet-css]')) {
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.href = LEAFLET_CSS_URL;
-          link.setAttribute('data-leaflet-css', '1');
-          document.head.appendChild(link);
-        }
 
+      // inject CSS if missing
+      if (!document.querySelector('link[data-leaflet-css]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = LEAFLET_CSS_URL;
+        link.setAttribute('data-leaflet-css', '1');
+        document.head.appendChild(link);
+      }
+
+      try {
         const LModule = await import('leaflet');
 
-        try {
-          const IconCandidate = (LModule as unknown as { Icon?: unknown }).Icon;
-          if (IconCandidate && typeof IconCandidate === 'function') {
-            const proto = (IconCandidate as { prototype?: Record<string, unknown> }).prototype;
-            if (proto && Object.prototype.hasOwnProperty.call(proto, '_getIconUrl')) {
-              // safe delete via Record index (no any)
-              delete (proto as Record<string, unknown>)['_getIconUrl'];
+        // Only attempt to set default icon URLs if Icon and Icon.Default exist
+        if (LModule && (LModule as unknown as { Icon?: unknown }).Icon) {
+          const IconCtor = (LModule as unknown as { Icon?: unknown }).Icon as any;
+          if (IconCtor && IconCtor.Default) {
+            try {
+              // set sensible defaults pointing at leaflet package images
+              IconCtor.Default.mergeOptions({
+                iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+                iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+                shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+              });
+            } catch (mergeErr) {
+              // non-fatal if mergeOptions isn't present
+              // eslint-disable-next-line no-console
+              console.warn('Leaflet mergeOptions failed', mergeErr);
             }
           }
-        } catch (innerErr) {
-          console.warn('leaflet icon patch failed', innerErr);
         }
-
-        LModule.Icon.Default.mergeOptions({
-          iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-          iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-          shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-        });
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.warn('Leaflet load failed', err);
       }
     })();
@@ -140,6 +142,7 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ في جلب الإعلانات: ' + msg);
+      // eslint-disable-next-line no-console
       console.warn(err);
     } finally {
       setLoading(false);
@@ -172,6 +175,7 @@ export default function AdminPostForm() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء: ' + msg);
+        // eslint-disable-next-line no-console
         console.warn(err);
       }
     },
@@ -201,6 +205,7 @@ export default function AdminPostForm() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء الجماعي: ' + msg);
+        // eslint-disable-next-line no-console
         console.warn(err);
       } finally {
         setLoading(false);
@@ -236,6 +241,7 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ عند الحفظ: ' + msg);
+      // eslint-disable-next-line no-console
       console.warn(err);
     } finally {
       setLoading(false);
@@ -419,8 +425,8 @@ export default function AdminPostForm() {
                       <div className="text-xs text-gray-400">{item.created_by}</div>
                       <div className="mt-1">
                         {item.company_logo ? (
-                          <div className="w-12 h-12 relative">
-                            <Image src={item.company_logo} alt="logo" fill style={{ objectFit: 'contain' }} />
+                          <div className="w-12 h-12 overflow-hidden rounded">
+                            <img src={item.company_logo} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                           </div>
                         ) : null}
                       </div>
@@ -430,7 +436,7 @@ export default function AdminPostForm() {
                     <td className="p-2">{item.phone ?? '—'}</td>
                     <td className="p-2 text-xs">
                       {item.country ?? '—'} / {item.province ?? '—'} / {item.city ?? '—'}
-                      <div className="mt-1 text-xxs">{item.location_lat && item.location_lng ? `lat ${item.location_lat}, lng ${item.location_lng} `: 'بدون إحداثيات'}</div>
+                      <div className="mt-1 text-xxs">{item.location_lat != null && item.location_lng != null ? `lat ${item.location_lat}, lng ${item.location_lng} `: 'بدون إحداثيات'}</div>
                     </td>
                     <td className="p-2 text-xs">{item.payment_code ?? '—'} / {item.payment_id ?? '—'}</td>
                     <td className="p-2">{item.approved === true ? '✅' : item.approved === false ? '❌' : '⏳'}</td>
@@ -473,7 +479,7 @@ export default function AdminPostForm() {
                   <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify-center">
                     {item.image_url ? (
                       <div className="relative w-16 h-16">
-                        <Image src={item.image_url} alt="img" fill style={{ objectFit: 'cover' }} />
+                        <img src={item.image_url} alt="img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
                     ) : (
                       <div className="text-xs text-gray-400 p-2">لا صورة</div>
@@ -635,6 +641,7 @@ export default function AdminPostForm() {
                     editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
+                  style={{ width: '100%', height: '100%' }}
                   // @ts-ignore
 whenCreated={(map) => {
   mapRef.current = map;
@@ -642,7 +649,7 @@ whenCreated={(map) => {
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
-                  {editData.location_lat && editData.location_lng && (
+                  {editData.location_lat != null && editData.location_lng != null && (
                     <Marker position={[Number(editData.location_lat), Number(editData.location_lng)]} />
                   )}
                 </MapContainer>
