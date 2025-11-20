@@ -634,10 +634,9 @@ export default function AdminPostForm() {
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
                   style={{ width: '100%', height: '100%' }}
-                  // @ts-ignore
-whenCreated={(map) => {
-  mapRef.current = map;
-}}
+                  whenCreated={(map: LeafletMap) => {
+                    mapRef.current = map;
+                  }}
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
