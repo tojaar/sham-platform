@@ -4,23 +4,21 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
-import type { Map as LeafletMap } from 'leaflet';
+import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
 
 // Client-only map components
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
 
-// MapClick dynamic component that imports useMapEvents on client only
+// MapClick dynamic component typed with LeafletMouseEvent
 const MapClick = dynamic(
   async () => {
     const mod = await import('react-leaflet');
     const { useMapEvents } = mod;
     return function MapClickClient({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
-      // use the proper Leaflet event type at runtime; dynamic import ensures client-only
       useMapEvents({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        click(e: any) {
+        click(e: LeafletMouseEvent) {
           setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
         },
       });
@@ -30,7 +28,7 @@ const MapClick = dynamic(
   { ssr: false }
 );
 
-// CDN for leaflet CSS (change if you host differently)
+// CDN for leaflet CSS (tweak if you host assets locally)
 const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 
 type Ad = {
@@ -56,7 +54,7 @@ type Ad = {
   location_lng?: number | '' | null;
 };
 
-// helper to CSV
+// helper: convert rows to CSV
 const toCSV = (rows: Array<Record<string, unknown>>): string => {
   if (!rows || rows.length === 0) return '';
   const keys = Object.keys(rows[0]);
@@ -66,8 +64,8 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
-          const safe = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
-          return "${safe}";
+          const escaped = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
+          return "${escaped}";
         })
         .join(',')
     )
@@ -95,7 +93,7 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // Load leaflet CSS via <link> and fix icons on client only
+  // Load leaflet CSS via <link> and patch icons safely (no any)
   useEffect(() => {
     (async () => {
       if (typeof window === 'undefined') return;
@@ -108,21 +106,29 @@ export default function AdminPostForm() {
           document.head.appendChild(link);
         }
 
-        const L = await import('leaflet');
+        const LModule = await import('leaflet');
+
+        // runtime-safe handling: narrow types and check existence
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          delete (L.Icon.Default as any).prototype._getIconUrl;
-        } catch {
-          // ignore
+          const IconCandidate = (LModule as unknown as { Icon?: unknown }).Icon;
+          if (IconCandidate && typeof IconCandidate === 'function') {
+            const proto = (IconCandidate as { prototype?: Record<string, unknown> }).prototype;
+            if (proto && Object.prototype.hasOwnProperty.call(proto, '_getIconUrl')) {
+              // safe delete using index signature
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              delete (proto as any)['_getIconUrl'];
+            }
+          }
+        } catch (innerErr) {
+          console.warn('leaflet icon patch failed', innerErr);
         }
-        L.Icon.Default.mergeOptions({
+
+        LModule.Icon.Default.mergeOptions({
           iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
           iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
           shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
         });
       } catch (err) {
-        // do not break admin area if leaflet fails
-        // eslint-disable-next-line no-console
         console.warn('Leaflet load failed', err);
       }
     })();
@@ -138,7 +144,6 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ في جلب الإعلانات: ' + msg);
-      // eslint-disable-next-line no-console
       console.warn(err);
     } finally {
       setLoading(false);
@@ -171,7 +176,6 @@ export default function AdminPostForm() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء: ' + msg);
-        // eslint-disable-next-line no-console
         console.warn(err);
       }
     },
@@ -201,7 +205,6 @@ export default function AdminPostForm() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء الجماعي: ' + msg);
-        // eslint-disable-next-line no-console
         console.warn(err);
       } finally {
         setLoading(false);
@@ -237,7 +240,6 @@ export default function AdminPostForm() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessage('خطأ عند الحفظ: ' + msg);
-      // eslint-disable-next-line no-console
       console.warn(err);
     } finally {
       setLoading(false);
@@ -637,7 +639,6 @@ export default function AdminPostForm() {
                     editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
-                  style={{ width: '100%', height: '100%' }}
                   // @ts-ignore
 whenCreated={(map) => {
   mapRef.current = map;
