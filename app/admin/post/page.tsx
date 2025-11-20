@@ -1,8 +1,8 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
 
@@ -53,7 +53,7 @@ type Ad = {
   location_lng?: number | '' | null;
 };
 
-// helper: convert rows to CSV (escaped values inline to avoid unused-variable warnings)
+// helper: convert rows to CSV (no unused variables)
 const toCSV = (rows: Array<Record<string, unknown>>): string => {
   if (!rows || rows.length === 0) return '';
   const keys = Object.keys(rows[0]);
@@ -62,9 +62,9 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
     .map((r) =>
       keys
         .map((k) => {
-          const value = r[k] ?? '';
-          const escaped = typeof value === 'string' ? value.replace(/"/g, '""') : String(value);
-          return "${escaped}";
+          const v = r[k] ?? '';
+          // هنا نستخدم Backticks بشكل صحيح
+          return `"${typeof v === 'string' ? v.replace(/"/g, '""') : String(v)}";`
         })
         .join(',')
     )
@@ -92,7 +92,7 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // Safely load Leaflet CSS and set default icons if available
+  // Safely load Leaflet CSS and set default icons if available (no ts-ignore)
   useEffect(() => {
     (async () => {
       if (typeof window === 'undefined') return;
@@ -107,7 +107,6 @@ export default function AdminPostForm() {
 
         const LModule = await import('leaflet');
 
-        // Use a narrow type for Icon to avoid any
         const iconContainer = (LModule as unknown) as {
           Icon?: {
             Default?: {
@@ -116,16 +115,12 @@ export default function AdminPostForm() {
           };
         };
 
-        if (iconContainer && iconContainer.Icon && iconContainer.Icon.Default && typeof iconContainer.Icon.Default.mergeOptions === 'function') {
-          try {
-            iconContainer.Icon.Default.mergeOptions({
-              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-            });
-          } catch (mergeErr) {
-            console.warn('Leaflet mergeOptions failed', mergeErr);
-          }
+        if (iconContainer?.Icon?.Default?.mergeOptions) {
+          iconContainer.Icon.Default.mergeOptions({
+            iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+            iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+            shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+          });
         }
       } catch (err) {
         console.warn('Leaflet load failed', err);
@@ -463,7 +458,7 @@ export default function AdminPostForm() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleAction(item.id, 'approve')} className="px-2 py-1 bg-green-600 rounded text-sm">✓</button>
-                  <button onClick={() => handleEdit(item)} className="px-2 py-1 bg-blue-600 rounded text-sm">✎</button>
+                  <button onClick={() => handleEdit(item)} className="px-2 py-1 bg-blue-600 rounded text_sm">✎</button>
                 </div>
               </div>
             ))}
@@ -473,7 +468,7 @@ export default function AdminPostForm() {
             {paged.map((item) => (
               <div key={item.id} className="bg-gray-900 border border-cyan-700 rounded-lg p-4 shadow-lg">
                 <div className="flex items-start gap-3">
-                  <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify-center">
+                  <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify_center">
                     {item.image_url ? (
                       <div className="relative w-16 h-16">
                         <img src={item.image_url} alt="img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -513,7 +508,7 @@ export default function AdminPostForm() {
 
       <section className="mt-6 flex justify-between items-center">
         <div className="text-sm text-gray-400">إجمالي النتائج: {filtered.length}</div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items_center">
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-3 py-2 bg-gray-800 rounded">سابق</button>
           <div className="px-3 py-2 bg-gray-800 rounded">صفحة {page} من {Math.max(1, Math.ceil(filtered.length / perPage))}</div>
           <button onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil(filtered.length / perPage)), p + 1))} className="px-3 py-2 bg-gray-800 rounded">التالي</button>
@@ -638,10 +633,10 @@ export default function AdminPostForm() {
                     editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
-                  // @ts-ignore
-whenCreated={(map) => {
-  mapRef.current = map;
-}}
+                  style={{ width: '100%', height: '100%' }}
+                  whenCreated={(map: LeafletMap) => {
+                    mapRef.current = map;
+                  }}
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
