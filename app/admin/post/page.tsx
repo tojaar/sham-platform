@@ -28,7 +28,6 @@ const MapClick = dynamic(
   { ssr: false }
 );
 
-// CDN for leaflet CSS (tweak if you host assets locally)
 const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 
 type Ad = {
@@ -63,9 +62,9 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
     .map((r) =>
       keys
         .map((k) => {
-          const v = r[k] ?? '';
-          const escaped = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
-          return "${escaped}";
+          const value = r[k] ?? '';
+          const escapedValue = typeof value === 'string' ? value.replace(/"/g, '""') : String(value);
+          return "${escapedValue}";
         })
         .join(',')
     )
@@ -93,7 +92,6 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // Load leaflet CSS via <link> and patch icons safely (no any)
   useEffect(() => {
     (async () => {
       if (typeof window === 'undefined') return;
@@ -108,15 +106,13 @@ export default function AdminPostForm() {
 
         const LModule = await import('leaflet');
 
-        // runtime-safe handling: narrow types and check existence
         try {
           const IconCandidate = (LModule as unknown as { Icon?: unknown }).Icon;
           if (IconCandidate && typeof IconCandidate === 'function') {
             const proto = (IconCandidate as { prototype?: Record<string, unknown> }).prototype;
             if (proto && Object.prototype.hasOwnProperty.call(proto, '_getIconUrl')) {
-              // safe delete using index signature
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              delete (proto as any)['_getIconUrl'];
+              // safe delete via Record index (no any)
+              delete (proto as Record<string, unknown>)['_getIconUrl'];
             }
           }
         } catch (innerErr) {
