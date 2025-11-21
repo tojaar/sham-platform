@@ -5,17 +5,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
-import type { MapContainerProps } from 'react-leaflet';
 
 // Client-only map components
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
-
-// Safe wrapper to avoid JSX type mismatch on whenCreated prop
-const MapContainerSafe = (props: any) => {
-  return <MapContainer {...props} />;
-};
 
 // MapClick dynamic component typed with LeafletMouseEvent
 const MapClick = dynamic(
@@ -69,6 +63,7 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
+          // هنا نستخدم Backticks بشكل صحيح
           return `"${typeof v === 'string' ? v.replace(/"/g, '""') : String(v)}";`
         })
         .join(',')
@@ -97,11 +92,6 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // handleMapCreated: accept unknown then assert inside to avoid JSX parameter typing issues
-  const handleMapCreated = useCallback((map: unknown) => {
-    mapRef.current = map as LeafletMap;
-  }, []);
-
   // Safely load Leaflet CSS and set default icons if available (no ts-ignore)
   useEffect(() => {
     (async () => {
@@ -126,15 +116,11 @@ export default function AdminPostForm() {
         };
 
         if (iconContainer?.Icon?.Default?.mergeOptions) {
-          try {
-            iconContainer.Icon.Default.mergeOptions({
-              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-            });
-          } catch (mergeErr) {
-            console.warn('Leaflet mergeOptions failed', mergeErr);
-          }
+          iconContainer.Icon.Default.mergeOptions({
+            iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+            iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+            shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+          });
         }
       } catch (err) {
         console.warn('Leaflet load failed', err);
@@ -209,7 +195,7 @@ export default function AdminPostForm() {
           if (error) throw error;
         }
         await refresh();
-        setMessage(`تم تنفيذ ${action} على ${ids.length} إعلان`);
+        setMessage(`م تنفيذ ${action} على ${ids.length} إعلان`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessage('فشل الإجراء الجماعي: ' + msg);
@@ -472,7 +458,7 @@ export default function AdminPostForm() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleAction(item.id, 'approve')} className="px-2 py-1 bg-green-600 rounded text-sm">✓</button>
-                  <button onClick={() => handleEdit(item)} className="px-2 py-1 bg-blue-600 rounded text-sm">✎</button>
+                  <button onClick={() => handleEdit(item)} className="px-2 py-1 bg-blue-600 rounded text_sm">✎</button>
                 </div>
               </div>
             ))}
@@ -482,7 +468,7 @@ export default function AdminPostForm() {
             {paged.map((item) => (
               <div key={item.id} className="bg-gray-900 border border-cyan-700 rounded-lg p-4 shadow-lg">
                 <div className="flex items-start gap-3">
-                  <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify-center">
+                  <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify_center">
                     {item.image_url ? (
                       <div className="relative w-16 h-16">
                         <img src={item.image_url} alt="img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -522,7 +508,7 @@ export default function AdminPostForm() {
 
       <section className="mt-6 flex justify-between items-center">
         <div className="text-sm text-gray-400">إجمالي النتائج: {filtered.length}</div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items_center">
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-3 py-2 bg-gray-800 rounded">سابق</button>
           <div className="px-3 py-2 bg-gray-800 rounded">صفحة {page} من {Math.max(1, Math.ceil(filtered.length / perPage))}</div>
           <button onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil(filtered.length / perPage)), p + 1))} className="px-3 py-2 bg-gray-800 rounded">التالي</button>
@@ -640,7 +626,7 @@ export default function AdminPostForm() {
             <div className="mt-4">
               <div className="text-sm text-gray-300 mb-2">تحرير الموقع تفاعليًا (انقر على الخريطة لتعيين الإحداثيات)</div>
               <div className="w-full h-60 rounded overflow-hidden border border-cyan-600">
-                <MapContainerSafe
+                <MapContainer
                   key={mapKey}
                   center={[
                     editData.location_lat !== '' && editData.location_lat != null ? Number(editData.location_lat) : 33.3128,
@@ -648,14 +634,16 @@ export default function AdminPostForm() {
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
                   style={{ width: '100%', height: '100%' }}
-                  whenCreated={handleMapCreated}
+                  whencreated={(map: LeafletMap) => {
+                    mapRef.current = map;
+                  }}
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
                   {editData.location_lat != null && editData.location_lng != null && (
                     <Marker position={[Number(editData.location_lat), Number(editData.location_lng)]} />
                   )}
-                </MapContainerSafe>
+                </MapContainer>
               </div>
             </div>
 
