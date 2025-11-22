@@ -2,33 +2,10 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
-
-// Client-only map components
-const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
-const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
-
-// MapClick dynamic component typed with LeafletMouseEvent
-const MapClick = dynamic(
-  async () => {
-    const mod = await import('react-leaflet');
-    const { useMapEvents } = mod;
-    return function MapClickClient({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
-      useMapEvents({
-        click(e: LeafletMouseEvent) {
-          setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-        },
-      });
-      return null;
-    };
-  },
-  { ssr: false }
-);
-
-const LEAFLET_CSS_URL = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+import 'leaflet/dist/leaflet.css';
 
 type Ad = {
   id: string;
@@ -53,7 +30,7 @@ type Ad = {
   location_lng?: number | '' | null;
 };
 
-// helper: convert rows to CSV (no unused variables)
+// helper: convert rows to CSV
 const toCSV = (rows: Array<Record<string, unknown>>): string => {
   if (!rows || rows.length === 0) return '';
   const keys = Object.keys(rows[0]);
@@ -63,7 +40,6 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
-          // هنا نستخدم Backticks بشكل صحيح
           return `"${typeof v === 'string' ? v.replace(/"/g, '""') : String(v)}";`
         })
         .join(',')
@@ -71,6 +47,16 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
     .join('\n');
   return `${header}\n${body};`
 };
+
+// MapClick component to capture clicks and set coordinates
+function MapClick({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
+  useMapEvents({
+    click(e: LeafletMouseEvent) {
+      setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+    },
+  });
+  return null;
+}
 
 export default function AdminPostForm() {
   const [posts, setPosts] = useState<Ad[]>([]);
@@ -88,42 +74,42 @@ export default function AdminPostForm() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<Ad>>({});
   const [mapKey, setMapKey] = useState<number>(0);
+
+  // mapRef holds the Leaflet Map instance for imperative actions
   const mapRef = useRef<LeafletMap | null>(null);
+
+  // elementRef is the React ref we attach to MapContainer to get the Map instance.
+  // react-leaflet returns the Leaflet Map instance via the component ref; typing that exactly is awkward,
+  // so we use any for the element ref but immediately assign to mapRef as LeafletMap.
+  const mapElementRef = useRef<any>(null);
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // Safely load Leaflet CSS and set default icons if available (no ts-ignore)
+  // When mapElementRef is set (after mount/re-render), copy to mapRef.current
+  useEffect(() => {
+    if (mapElementRef.current) {
+      // react-leaflet's MapContainer ref.current is the Leaflet Map instance
+      mapRef.current = mapElementRef.current as LeafletMap;
+    }
+  }, [mapKey, mapElementRef.current]);
+
+  // Load marker icon assets for Leaflet (avoid missing icons)
   useEffect(() => {
     (async () => {
       if (typeof window === 'undefined') return;
       try {
-        if (!document.querySelector('link[data-leaflet-css]')) {
-          const link = document.createElement('link');
-          link.rel = 'stylesheet';
-          link.href = LEAFLET_CSS_URL;
-          link.setAttribute('data-leaflet-css', '1');
-          document.head.appendChild(link);
-        }
-
-        const LModule = await import('leaflet');
-
-        const iconContainer = (LModule as unknown) as {
-          Icon?: {
-            Default?: {
-              mergeOptions?: (opts: Record<string, string>) => void;
-            };
-          };
-        };
-
-        if (iconContainer?.Icon?.Default?.mergeOptions) {
-          iconContainer.Icon.Default.mergeOptions({
+        const L = await import('leaflet');
+        try {
+          L.Icon.Default.mergeOptions({
             iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
             iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
             shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-          });
+          } as any);
+        } catch {
+          // ignore
         }
-      } catch (err) {
-        console.warn('Leaflet load failed', err);
+      } catch {
+        // ignore
       }
     })();
   }, []);
@@ -447,7 +433,7 @@ export default function AdminPostForm() {
         ) : viewMode === 'compact' ? (
           <div className="space-y-3">
             {paged.map((item) => (
-              <div key={item.id} className="flex items-center justify-between bg-gray-900 p-3 rounded border border-cyan-700">
+              <div key={item.id} className="flex items-center justify-between bg-gray-900 p-3rounded border border-cyan-700">
                 <div className="flex items-center gap-3">
                   <input type="checkbox" checked={!!selectedIds[item.id]} onChange={() => toggleSelect(item.id)} />
                   <div>
@@ -458,7 +444,7 @@ export default function AdminPostForm() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleAction(item.id, 'approve')} className="px-2 py-1 bg-green-600 rounded text-sm">✓</button>
-                  <button onClick={() => handleEdit(item)} className="px-2 py-1 bg-blue-600 rounded text_sm">✎</button>
+                  <button onClick={() => handleEdit(item)} className="px-2 py-1 bg-blue-600 rounded text-sm">✎</button>
                 </div>
               </div>
             ))}
@@ -468,7 +454,7 @@ export default function AdminPostForm() {
             {paged.map((item) => (
               <div key={item.id} className="bg-gray-900 border border-cyan-700 rounded-lg p-4 shadow-lg">
                 <div className="flex items-start gap-3">
-                  <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify_center">
+                  <div className="w-16 h-16 bg-[#06121a] rounded overflow-hidden flex items-center justify-center">
                     {item.image_url ? (
                       <div className="relative w-16 h-16">
                         <img src={item.image_url} alt="img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -508,7 +494,7 @@ export default function AdminPostForm() {
 
       <section className="mt-6 flex justify-between items-center">
         <div className="text-sm text-gray-400">إجمالي النتائج: {filtered.length}</div>
-        <div className="flex gap-2 items_center">
+        <div className="flex gap-2 items-center">
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} className="px-3 py-2 bg-gray-800 rounded">سابق</button>
           <div className="px-3 py-2 bg-gray-800 rounded">صفحة {page} من {Math.max(1, Math.ceil(filtered.length / perPage))}</div>
           <button onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil(filtered.length / perPage)), p + 1))} className="px-3 py-2 bg-gray-800 rounded">التالي</button>
@@ -634,9 +620,7 @@ export default function AdminPostForm() {
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
                   style={{ width: '100%', height: '100%' }}
-                  whencreated={(map: LeafletMap) => {
-                    mapRef.current = map;
-                  }}
+                  ref={mapElementRef}
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
