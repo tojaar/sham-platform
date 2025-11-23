@@ -40,7 +40,8 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
-          return `"${typeof v === 'string' ? v.replace(/"/g, '""') : String(v)}";`
+          const cell = typeof v === 'string' ? v.replace(/"/g, '""') : String(v);
+          return "${cell}";
         })
         .join(',')
     )
@@ -78,20 +79,12 @@ export default function AdminPostForm() {
   // mapRef holds the Leaflet Map instance for imperative actions
   const mapRef = useRef<LeafletMap | null>(null);
 
-  // elementRef is the React ref we attach to MapContainer to get the Map instance.
-  // react-leaflet returns the Leaflet Map instance via the component ref; typing that exactly is awkward,
-  // so we use any for the element ref but immediately assign to mapRef as LeafletMap.
-  const mapElementRef = useRef<any>(null);
-
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // When mapElementRef is set (after mount/re-render), copy to mapRef.current
+  // When mapKey changes, we may want to ensure mapRef is up-to-date — no mapElementRef.current dependency here
   useEffect(() => {
-    if (mapElementRef.current) {
-      // react-leaflet's MapContainer ref.current is the Leaflet Map instance
-      mapRef.current = mapElementRef.current as LeafletMap;
-    }
-  }, [mapKey, mapElementRef.current]);
+    // no-op: placeholder to react to mapKey changes if needed later
+  }, [mapKey]);
 
   // Load marker icon assets for Leaflet (avoid missing icons)
   useEffect(() => {
@@ -100,11 +93,12 @@ export default function AdminPostForm() {
       try {
         const L = await import('leaflet');
         try {
-          L.Icon.Default.mergeOptions({
+          // mergeOptions expects Partial<IconOptions> - using unknown cast to avoid any
+          (L.Icon.Default as unknown as { mergeOptions: (o: Record<string, string>) => void }).mergeOptions({
             iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
             iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
             shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-          } as any);
+          });
         } catch {
           // ignore
         }
@@ -209,9 +203,19 @@ export default function AdminPostForm() {
     setMessage(null);
     setLoading(true);
     try {
-      const payload = { ...editData } as Record<string, unknown>;
+      // prepare payload
+      const payload: Record<string, unknown> = { ...editData };
+
+      // Normalize empty strings to null for numeric/location fields
       if (payload.location_lat === '') payload.location_lat = null;
       if (payload.location_lng === '') payload.location_lng = null;
+      if (payload.price === '') payload.price = null;
+
+      // If price should be numeric in DB, convert strings that look like numbers
+      if (typeof payload.price === 'string' && payload.price.trim() !== '' && !Number.isNaN(Number(payload.price))) {
+        payload.price = Number(payload.price);
+      }
+
       const { error } = await supabase.from('ads').update(payload).eq('id', editId);
       if (error) throw error;
       setEditId(null);
@@ -291,9 +295,11 @@ export default function AdminPostForm() {
 
   const fmt = (v: unknown): string => {
     try {
-      return new Date(v as string).toLocaleString();
+      const d = new Date(String(v));
+      if (Number.isNaN(d.getTime())) return String(v ?? '');
+      return d.toLocaleString();
     } catch {
-      return String(v);
+      return String(v ?? '');
     }
   };
 
@@ -345,26 +351,43 @@ export default function AdminPostForm() {
           </div>
 
           <div className="flex gap-2 items-center">
-            <div className="flex gap-2">
-              <button onClick={() => setViewMode('cards')} className={`px-3 py-2 rounded ${viewMode === 'cards' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
+            <div className="flex gap-2 items-center">
+              <button
+                onClick={() => setViewMode('cards')}
+                className={`px-3 py-2 rounded ${viewMode === 'cards' ? 'bg-cyan-600' : 'bg-gray-800'}`}
+              >
                 بطاقات
               </button>
-              <button onClick={() => setViewMode('table')} className={`px-3 py-2 rounded ${viewMode === 'table' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-2 rounded ${viewMode === 'table' ? 'bg-cyan-600' : 'bg-gray-800'}`}
+              >
                 جدول
               </button>
-              <button onClick={() => setViewMode('compact')} className={`px-3 py-2 rounded ${viewMode === 'compact' ? 'bg-cyan-600' : 'bg-gray-800'}`}>
+              <button
+                onClick={() => setViewMode('compact')}
+                className={`px-3 py-2 rounded ${viewMode === 'compact' ? 'bg-cyan-600' : 'bg-gray-800'}`}
+              >
                 مصغّر
               </button>
             </div>
 
             <div className="flex gap-2 ml-2">
-              <button onClick={() => bulkAction('approve')} className="px-3 py-2 bg-green-600 rounded">قبول مجمّع</button>
-              <button onClick={() => bulkAction('reject')} className="px-3 py-2 bg-yellow-500 rounded">رفض مجمّع</button>
-              <button onClick={() => bulkAction('delete')} className="px-3 py-2 bg-red-600 rounded">حذف مجمّع</button>
+              <button onClick={() => bulkAction('approve')} className="px-3 py-2 bg-green-600 rounded">
+                قبول مجمّع
+              </button>
+              <button onClick={() => bulkAction('reject')} className="px-3 py-2 bg-yellow-500 rounded">
+                رفض مجمّع
+              </button>
+              <button onClick={() => bulkAction('delete')} className="px-3 py-2 bg-red-600 rounded">
+                حذف مجمّع
+              </button>
             </div>
 
             <div className="ml-4">
-              <button onClick={exportCSV} className="px-3 py-2 bg-indigo-600 rounded">تصدير CSV</button>
+              <button onClick={exportCSV} className="px-3 py-2 bg-indigo-600 rounded">
+                تصدير CSV
+              </button>
             </div>
           </div>
         </div>
@@ -433,7 +456,7 @@ export default function AdminPostForm() {
         ) : viewMode === 'compact' ? (
           <div className="space-y-3">
             {paged.map((item) => (
-              <div key={item.id} className="flex items-center justify-between bg-gray-900 p-3rounded border border-cyan-700">
+              <div key={item.id} className="flex items-center justify-between bg-gray-900 p-3 rounded border border-cyan-700">
                 <div className="flex items-center gap-3">
                   <input type="checkbox" checked={!!selectedIds[item.id]} onChange={() => toggleSelect(item.id)} />
                   <div>
@@ -477,14 +500,14 @@ export default function AdminPostForm() {
                       <div>📞 {item.phone ?? '—'}</div>
                       <div>📍 {item.country ?? '—'} / {item.province ?? '—'} / {item.city ?? '—'}</div>
                     </div>
-                  </div>
-                </div>
 
-                <div className="flex gap-2 mt-4">
-                  <button onClick={() => handleAction(item.id, 'approve')} className="bg-green-600 px-3 py-1 rounded">قبول</button>
-                  <button onClick={() => handleAction(item.id, 'reject')} className="bg-yellow-500 px-3 py-1 rounded">رفض</button>
-                  <button onClick={() => handleEdit(item)} className="bg-blue-600 px-3 py-1 rounded">تعديل</button>
-                  <button onClick={() => handleAction(item.id, 'delete')} className="bg-red-600 px-3 py-1 rounded">حذف</button>
+                    <div className="flex gap-2 mt-4">
+                      <button onClick={() => handleAction(item.id, 'approve')} className="bg-green-600 px-3 py-1 rounded">قبول</button>
+                      <button onClick={() => handleAction(item.id, 'reject')} className="bg-yellow-500 px-3 py-1 rounded">رفض</button>
+                      <button onClick={() => handleEdit(item)} className="bg-blue-600 px-3 py-1 rounded">تعديل</button>
+                      <button onClick={() => handleAction(item.id, 'delete')} className="bg-red-600 px-3 py-1 rounded">حذف</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -508,68 +531,74 @@ export default function AdminPostForm() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <input
-                value={editData.name ?? ''}
+                value={String(editData.name ?? '')}
                 onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="الاسم"
               />
               <input
-                value={editData.category ?? ''}
+                value={String(editData.category ?? '')}
                 onChange={(e) => setEditData({ ...editData, category: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="النوع"
               />
               <input
-                value={editData.price ?? ''}
-                onChange={(e) => setEditData({ ...editData, price: e.target.value })}
+                value={editData.price === null || editData.price === undefined ? '' : String(editData.price)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setEditData({ ...editData, price: v === '' ? '' : v });
+                }}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="السعر"
               />
               <input
-                value={editData.payment_code ?? ''}
+                value={String(editData.payment_code ?? '')}
                 onChange={(e) => setEditData({ ...editData, payment_code: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="رمز الدفع"
               />
               <input
-                value={editData.payment_id ?? ''}
+                value={String(editData.payment_id ?? '')}
                 onChange={(e) => setEditData({ ...editData, payment_id: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="معرف الدفع"
               />
               <input
-                value={editData.country ?? ''}
+                value={String(editData.country ?? '')}
                 onChange={(e) => setEditData({ ...editData, country: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="الدولة"
               />
               <input
-                value={editData.province ?? ''}
+                value={String(editData.province ?? '')}
                 onChange={(e) => setEditData({ ...editData, province: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="المحافظة"
               />
               <input
-                value={editData.city ?? ''}
+                value={String(editData.city ?? '')}
                 onChange={(e) => setEditData({ ...editData, city: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="المدينة"
               />
-              <input
-                value={editData.address ?? ''}
-                onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-                className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
-                placeholder="العنوان"
-              />
-              <input
-                value={editData.phone ?? ''}
-                onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-                className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
-                placeholder="رقم الهاتف"
-              />
+            </div>
+
+            <input
+              value={String(editData.address ?? '')}
+              onChange={(e) => setEditData({ ...editData, address: e.target.value })}
+              className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
+              placeholder="العنوان"
+            />
+            <input
+              value={String(editData.phone ?? '')}
+              onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+              className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
+              placeholder="رقم الهاتف"
+            />
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <input
                 type="number"
-                value={editData.location_lat ?? ''}
+                value={editData.location_lat === null || editData.location_lat === undefined || editData.location_lat === '' ? '' : String(editData.location_lat)}
                 onChange={(e) =>
                   setEditData({
                     ...editData,
@@ -581,7 +610,7 @@ export default function AdminPostForm() {
               />
               <input
                 type="number"
-                value={editData.location_lng ?? ''}
+                value={editData.location_lng === null || editData.location_lng === undefined || editData.location_lng === '' ? '' : String(editData.location_lng)}
                 onChange={(e) =>
                   setEditData({
                     ...editData,
@@ -591,49 +620,63 @@ export default function AdminPostForm() {
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
                 placeholder="Longitude"
               />
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={!!editData.is_company}
-                  onChange={(e) => setEditData({ ...editData, is_company: e.target.checked })}
-                />
-                شركة؟
-              </label>
             </div>
 
+            <label className="flex items-center gap-2 text-sm mt-3">
+              <input
+                type="checkbox"
+                checked={!!editData.is_company}
+                onChange={(e) => setEditData({ ...editData, is_company: e.target.checked })}
+              />
+              شركة؟
+            </label>
+
             <textarea
-              value={editData.description ?? ''}
+              value={String(editData.description ?? '')}
               onChange={(e) => setEditData({ ...editData, description: e.target.value })}
               className="w-full mt-4 p-2 bg-gray-800 border border-cyan-500 rounded"
               placeholder="الوصف الكامل"
               rows={4}
-            ></textarea>
+            />
 
             <div className="mt-4">
               <div className="text-sm text-gray-300 mb-2">تحرير الموقع تفاعليًا (انقر على الخريطة لتعيين الإحداثيات)</div>
               <div className="w-full h-60 rounded overflow-hidden border border-cyan-600">
                 <MapContainer
                   key={mapKey}
+                  whenCreated={(mapInstance) => {
+                    mapRef.current = mapInstance as LeafletMap;
+                  }}
                   center={[
                     editData.location_lat !== '' && editData.location_lat != null ? Number(editData.location_lat) : 33.3128,
                     editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
                   style={{ width: '100%', height: '100%' }}
-                  ref={mapElementRef}
                 >
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <MapClick setCoords={setEditCoords} />
-                  {editData.location_lat != null && editData.location_lng != null && (
-                    <Marker position={[Number(editData.location_lat), Number(editData.location_lng)]} />
-                  )}
+                  {editData.location_lat != null && editData.location_lng != null && editData.location_lat !== '' && editData.location_lng !== '' ? (
+                    <Marker position={[Number(editData.location_lat), Number(editData.location_lng)] as [number, number]} />
+                  ) : null}
                 </MapContainer>
               </div>
             </div>
 
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={() => setEditId(null)} className="bg-gray-700 px-4 py-2 rounded">إلغاء</button>
-              <button onClick={saveEdit} className="bg-cyan-600 text-white px-4 py-2 rounded">💾 حفظ</button>
+              <button
+                onClick={() => {
+                  setEditId(null);
+                  setEditData({});
+                  setMessage(null);
+                }}
+                className="px-4 py-2 bg-gray-700 rounded"
+              >
+                إلغاء
+              </button>
+              <button onClick={saveEdit} className="px-4 py-2 bg-cyan-600 rounded">
+                حفظ
+              </button>
             </div>
           </div>
         </div>
