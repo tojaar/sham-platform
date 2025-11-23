@@ -26,7 +26,16 @@ type Member = {
   status?: string | null;
 };
 
-function safeStr(v: any) { return String(v ?? "").trim(); }
+function safeStr(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v.trim();
+  if (typeof v === "number" || typeof v === "boolean") return String(v).trim();
+  try {
+    return JSON.stringify(v).trim();
+  } catch {
+    return "";
+  }
+}
 
 function calcLevelOneRewardForIndex(index: number) {
   switch (index) {
@@ -140,8 +149,8 @@ export default async function UserPage({ params }: Props) {
         if (idx < weeks) buckets[weeks - 1 - idx] += 1;
       });
       return buckets;
-    } catch {
-      return [];
+    } catch (_err: unknown) {
+      return new Array(8).fill(0);
     }
   })();
 
