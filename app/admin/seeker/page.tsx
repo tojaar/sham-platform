@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import 'leaflet/dist/leaflet.css';
+import type { PostgrestResponse } from '@supabase/supabase-js';
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -29,7 +30,7 @@ type Seeker = {
   created_at?: string | null;
   image_url?: string | null;
   location?: string | null; // "lat,lng"
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 export default function AdminSeekerForm() {
@@ -57,13 +58,14 @@ export default function AdminSeekerForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, filterStatus, sortBy, sortDir, page, pageSize]);
 
-  // --- Fetch rows with correct query building ---
+  // --- Fetch rows with correct query building and normalization ---
   async function fetchRows() {
     setLoading(true);
     setError(null);
     try {
       const offset = page * pageSize;
-      let qb: any = supabase
+
+      let qb = supabase
         .from('seeker_requests')
         .select('*', { count: 'exact' })
         .order(sortBy, { ascending: sortDir === 'asc' })
@@ -76,13 +78,31 @@ export default function AdminSeekerForm() {
         qb = qb.or(`name.ilike.%${q}%,phone.ilike.%${q}%,payment_code.ilike.%${q}%,transaction_id.ilike.%${q}%`);
       }
 
-      const { data, error: qbError, count } = await qb;
+      const raw = await qb;
+      const res = raw as PostgrestResponse<unknown>;
+      const { data, error: qbError, count } = res;
       if (qbError) throw qbError;
-      setRows(data ?? []);
+
+      // Normalize data to Seeker[] safely
+      let normalized: Seeker[] = [];
+      if (!data) {
+        normalized = [];
+      } else if (Array.isArray(data)) {
+        if (data.length > 0 && Array.isArray(data[0])) {
+          normalized = (data as unknown as Seeker[][]).flat() as Seeker[];
+        } else {
+          normalized = data as unknown as Seeker[];
+        }
+      } else {
+        normalized = [data as unknown as Seeker];
+      }
+
+      setRows(normalized);
       setTotalCount(typeof count === 'number' ? count : null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('fetchRows', err);
-      setError(err?.message ?? String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
       setRows([]);
       setTotalCount(null);
     } finally {
@@ -101,7 +121,6 @@ export default function AdminSeekerForm() {
     return { lat, lng };
   }
 
-  // Utility to mark busy
   function setBusy(id: string, v: boolean) {
     setBusyIds(prev => ({ ...prev, [id]: v }));
   }
@@ -116,31 +135,35 @@ export default function AdminSeekerForm() {
     const approvedValue = status === 'approved' ? true : status === 'rejected' ? false : null;
     const prevRow = rows.find(r => r.id === row.id) ?? null;
 
+    // optimistic update
     setRows(prev => prev.map(p => p.id === row.id ? { ...p, status, approved: approvedValue } : p));
     if (selected && selected.id === row.id) setSelected({ ...selected, status, approved: approvedValue });
 
     try {
       const payload: Partial<Seeker> = { status, approved: approvedValue };
-      const { data, error } = await supabase
+      const res = await supabase
         .from('seeker_requests')
         .update(payload)
         .eq('id', row.id)
         .select()
         .maybeSingle();
 
+      const { data, error } = res as { data?: Seeker | null; error?: Error | null };
       if (error) throw error;
 
       if (data) {
         setRows(prev => prev.map(p => p.id === row.id ? { ...p, ...data } : p));
         if (selected && selected.id === row.id) setSelected({ ...selected, ...data });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('updateStatus', err);
+      // rollback to previous state
       if (prevRow) {
         setRows(prev => prev.map(p => p.id === prevRow.id ? prevRow : p));
         if (selected && selected.id === prevRow.id) setSelected(prevRow);
       }
-      setError('فشل تحديث الحالة: ' + (err?.message ?? String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError('فشل تحديث الحالة: ' + msg);
     } finally {
       setBusy(row.id, false);
     }
@@ -152,14 +175,16 @@ export default function AdminSeekerForm() {
     if (busyIds[row.id]) return;
     setBusy(row.id, true);
     try {
-      const { error } = await supabase.from('seeker_requests').delete().eq('id', row.id);
+      const res = await supabase.from('seeker_requests').delete().eq('id', row.id);
+      const { error } = res as { error?: Error | null };
       if (error) throw error;
       setRows(prev => prev.filter(p => p.id !== row.id));
       setConfirmDelete(null);
       if (selected && selected.id === row.id) setSelected(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('deleteRow', err);
-      setError('فشل حذف السجل: ' + (err?.message ?? String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError('فشل حذف السجل: ' + msg);
     } finally {
       setBusy(row.id, false);
     }
@@ -188,8 +213,16 @@ export default function AdminSeekerForm() {
         image_url: edited.image_url ?? null,
         location: edited.location ?? null,
       };
-      const { data, error } = await supabase.from('seeker_requests').update(payload).eq('id', edited.id).select().maybeSingle();
+      const res = await supabase
+        .from('seeker_requests')
+        .update(payload)
+        .eq('id', edited.id)
+        .select()
+        .maybeSingle();
+
+      const { data, error } = res as { data?: Seeker | null; error?: Error | null };
       if (error) throw error;
+
       if (data) {
         setRows(prev => prev.map(p => p.id === edited.id ? { ...p, ...data } as Seeker : p));
         if (selected && selected.id === edited.id) setSelected({ ...selected, ...data });
@@ -198,9 +231,10 @@ export default function AdminSeekerForm() {
         if (selected && selected.id === edited.id) setSelected({ ...selected, ...payload });
       }
       setEditing(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('saveEdit', err);
-      setError('فشل حفظ التعديل: ' + (err?.message ?? String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError('فشل حفظ التعديل: ' + msg);
     } finally {
       setBusy(edited.id, false);
     }
@@ -213,15 +247,17 @@ export default function AdminSeekerForm() {
     setLoading(true);
     setError(null);
     try {
-      const payload = { status: 'approved', approved: true };
-      const { error } = await supabase.from('seeker_requests').update(payload).in('id', ids);
+      const payload: Partial<Seeker> = { status: 'approved', approved: true };
+      const res = await supabase.from('seeker_requests').update(payload).in('id', ids);
+      const { error } = res as { error?: Error | null };
       if (error) throw error;
       setRows(prev => prev.map(p => ids.includes(p.id) ? { ...p, ...payload } : p));
       setBatchSelection({});
       if (selected && ids.includes(selected.id)) setSelected({ ...selected, ...payload });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('batchApprove', err);
-      setError('فشل تنفيذ العملية: ' + (err?.message ?? String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError('فشل تنفيذ العملية: ' + msg);
     } finally {
       setLoading(false);
     }
@@ -233,15 +269,17 @@ export default function AdminSeekerForm() {
     setLoading(true);
     setError(null);
     try {
-      const payload = { status: 'rejected', approved: false };
-      const { error } = await supabase.from('seeker_requests').update(payload).in('id', ids);
+      const payload: Partial<Seeker> = { status: 'rejected', approved: false };
+      const res = await supabase.from('seeker_requests').update(payload).in('id', ids);
+      const { error } = res as { error?: Error | null };
       if (error) throw error;
       setRows(prev => prev.map(p => ids.includes(p.id) ? { ...p, ...payload } : p));
       setBatchSelection({});
       if (selected && ids.includes(selected.id)) setSelected({ ...selected, ...payload });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('batchReject', err);
-      setError('فشل تنفيذ العملية: ' + (err?.message ?? String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError('فشل تنفيذ العملية: ' + msg);
     } finally {
       setLoading(false);
     }
@@ -249,7 +287,7 @@ export default function AdminSeekerForm() {
 
   const totalPages = totalCount ? Math.ceil(totalCount / pageSize) : null;
 
-  // --- Render (unchanged structure) ---
+  // --- Render ---
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#041018] via-[#07121a] to-[#031017] text-white p-6">
       <div className="max-w-[1400px] mx-auto px-4">
@@ -273,7 +311,7 @@ export default function AdminSeekerForm() {
             <div className="mt-2 flex gap-2 items-center text-xs text-white/70">
               <div className="flex items-center gap-2">
                 <label className="text-xs">الحالة</label>
-                <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value as any); setPage(0); }} className="px-2 py-1 rounded bg-[#07141a] border border-white/6">
+                <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value as 'all' | 'pending' | 'approved' | 'rejected'); setPage(0); }} className="px-2 py-1 rounded bg-[#07141a] border border-white/6">
                   <option value="all">الكل</option>
                   <option value="pending">قيد المراجعة</option>
                   <option value="approved">مقبول</option>
@@ -283,7 +321,7 @@ export default function AdminSeekerForm() {
 
               <div className="flex items-center gap-2 ml-auto">
                 <label className="text-xs">ترتيب</label>
-                <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as any); setPage(0); }} className="px-2 py-1 rounded bg-[#07141a] border border-white/6">
+                <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as 'created_at' | 'name'); setPage(0); }} className="px-2 py-1 rounded bg-[#07141a] border border-white/6">
                   <option value="created_at">التاريخ</option>
                   <option value="name">الاسم</option>
                 </select>
@@ -319,10 +357,8 @@ export default function AdminSeekerForm() {
           <div className="text-sm text-white/70 ml-auto">إجمالي: <span className="font-medium">{totalCount ?? '-'}</span></div>
         </div>
 
-        {/* جدول الحاوية */}
         <div className="bg-[#06161a] border border-white/6 rounded-lg overflow-hidden shadow-sm">
           <div style={{ display: 'grid', gridTemplateColumns: '48px minmax(220px, 1fr) 160px 180px 180px 90px 110px 260px', gap: 0 }}>
-            {/* رؤوس الأعمدة */}
             <div className="px-4 py-3 border-b border-white/6 text-xs font-semibold text-white/70 flex items-center">#</div>
             <div className="px-4 py-3 border-b border-white/6 text-xs font-semibold text-white/70 flex items-center">الاسم</div>
             <div className="px-4 py-3 border-b border-white/6 text-xs font-semibold text-white/70 flex items-center">الهاتف</div>
@@ -332,7 +368,6 @@ export default function AdminSeekerForm() {
             <div className="px-4 py-3 border-b border-white/6 text-xs font-semibold text-white/70 flex items-center justify-center">الحالة</div>
             <div className="px-4 py-3 border-b border-white/6 text-xs font-semibold text-white/70 flex items-center justify-center">إجراءات</div>
 
-            {/* صفوف البيانات */}
             {loading ? (
               <div className="col-span-8 p-8 text-center text-white/70">جاري التحميل...</div>
             ) : rows.length === 0 ? (
@@ -356,7 +391,7 @@ export default function AdminSeekerForm() {
 
                   <div className="px-4 py-3 border-b border-white/6 flex items-center justify-center">
                     {r.image_url ? (
-                      <img src={r.image_url} alt="img" className="w-14 h-10 object-cover rounded cursor-pointer" onClick={() => setSelected(r)} />
+                      <img src={String(r.image_url)} alt="img" className="w-14 h-10 object-cover rounded cursor-pointer" onClick={() => setSelected(r)} />
                     ) : (
                       <div className="w-14 h-10 bg-white/5 rounded flex items-center justify-center text-xs">لا صورة</div>
                     )}
@@ -370,7 +405,6 @@ export default function AdminSeekerForm() {
                     </span>
                   </div>
 
-                  {/* عمود الإجراءات */}
                   <div className="px-4 py-3 border-b border-white/6 flex items-center justify-center">
                     <div className="flex flex-col md:flex-row items-center md:justify-center gap-2">
                       <button onClick={() => setSelected(r)} className="px-3 py-1 rounded bg-white/6 text-sm whitespace-nowrap">عرض</button>
@@ -378,14 +412,14 @@ export default function AdminSeekerForm() {
                       <button
                         onClick={() => updateStatus(r, r.status === 'approved' ? 'pending' : 'approved')}
                         className="px-3 py-1 rounded bg-green-600 text-sm whitespace-nowrap"
-                        disabled={busyIds[r.id]}
+                        disabled={Boolean(busyIds[r.id])}
                       >
                         {busyIds[r.id] ? '...' : (r.status === 'approved' ? 'إلغاء' : 'قبول')}
                       </button>
                       <button
                         onClick={() => updateStatus(r, 'rejected')}
                         className="px-3 py-1 rounded bg-red-600 text-sm whitespace-nowrap"
-                        disabled={busyIds[r.id]}
+                        disabled={Boolean(busyIds[r.id])}
                       >
                         {busyIds[r.id] ? '...' : 'رفض'}
                       </button>
@@ -398,7 +432,6 @@ export default function AdminSeekerForm() {
           </div>
         </div>
 
-        {/* Pagination */}
         <div className="mt-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-sm text-white/70">
             <span>صفحة</span>
@@ -425,15 +458,14 @@ export default function AdminSeekerForm() {
           </div>
         </div>
 
-        {/* Details Modal */}
         {selected && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60" onClick={() => { setSelected(null); }} />
             <div className="relative w-full max-w-4xl bg-[#07181b] border border-white/6 rounded-lg p-4 z-10 shadow-xl overflow-y-auto" style={{ maxHeight: '90vh' }}>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-bold">{selected.name}</h2>
-                  <div className="text-sm text-white/70 mt-1">{selected.profession ?? ''}</div>
+                  <h2 className="text-lg font-bold">{selected?.name ?? ''}</h2>
+                  <div className="text-sm text-white/70 mt-1">{selected?.profession ?? ''}</div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -444,33 +476,33 @@ export default function AdminSeekerForm() {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1">
                   <div className="bg-white/5 rounded overflow-hidden">
-                    {selected.image_url ? (
-                      <img src={selected.image_url} alt="image" className="w-full h-56 object-cover" />
+                    {selected?.image_url ? (
+                      <img src={String(selected.image_url)} alt="image" className="w-full h-56 object-cover" />
                     ) : (
                       <div className="w-full h-56 flex items-center justify-center text-white/60">لا صورة</div>
                     )}
                   </div>
 
                   <div className="mt-3 text-sm text-white/70 space-y-1">
-                    <div><strong>الاسم:</strong> {selected.name ?? '—'}</div>
-                    <div><strong>المهنة:</strong> {selected.profession ?? '—'}</div>
-                    <div><strong>مكان السكن:</strong> {selected.residence ?? '—'}</div>
-                    <div><strong>العمر:</strong> {selected.age ?? '—'}</div>
-                    <div><strong>الشهادة:</strong> {selected.certificates ?? '—'}</div>
-                    <div><strong>هاتف:</strong> {selected.phone ?? '—'}</div>
-                    <div><strong>الدولة:</strong> {selected.country ?? '—'}</div>
-                    <div><strong>المحافظة:</strong> {selected.province ?? '—'}</div>
-                    <div><strong>المدينة:</strong> {selected.city ?? '—'}</div>
-                    <div><strong>رمز شام كاش:</strong> {selected.payment_code ?? '—'}</div>
-                    <div><strong>معرف USDT:</strong> {selected.transaction_id ?? '—'}</div>
-                    <div><strong>الحالة:</strong> {selected.status ?? 'pending'}</div>
-                    <div><strong>إنشئ في:</strong> {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</div>
+                    <div><strong>الاسم:</strong> {selected?.name ?? '—'}</div>
+                    <div><strong>المهنة:</strong> {selected?.profession ?? '—'}</div>
+                    <div><strong>مكان السكن:</strong> {selected?.residence ?? '—'}</div>
+                    <div><strong>العمر:</strong> {selected?.age ?? '—'}</div>
+                    <div><strong>الشهادة:</strong> {selected?.certificates ?? '—'}</div>
+                    <div><strong>هاتف:</strong> {selected?.phone ?? '—'}</div>
+                    <div><strong>الدولة:</strong> {selected?.country ?? '—'}</div>
+                    <div><strong>المحافظة:</strong> {selected?.province ?? '—'}</div>
+                    <div><strong>المدينة:</strong> {selected?.city ?? '—'}</div>
+                    <div><strong>رمز شام كاش:</strong> {selected?.payment_code ?? '—'}</div>
+                    <div><strong>معرف USDT:</strong> {selected?.transaction_id ?? '—'}</div>
+                    <div><strong>الحالة:</strong> {selected?.status ?? 'pending'}</div>
+                    <div><strong>إنشئ في:</strong> {selected?.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</div>
                   </div>
                 </div>
 
                 <div className="md:col-span-2">
                   {(() => {
-                    const loc = parseLocation(selected.location);
+                    const loc = parseLocation(selected?.location);
                     if (loc) {
                       return (
                         <div className="w-full h-64 rounded overflow-hidden border border-white/6">
@@ -483,7 +515,7 @@ export default function AdminSeekerForm() {
                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                             <Marker position={[loc.lat, loc.lng]}>
                               <Popup>
-                                {selected.name} <br /> {selected.location}
+                                {selected?.name ?? ''} <br /> {selected?.location ?? ''}
                               </Popup>
                             </Marker>
                           </MapContainer>
@@ -497,8 +529,8 @@ export default function AdminSeekerForm() {
                     <div className="flex gap-2 flex-wrap">
                       <button onClick={() => selected && updateStatus(selected, 'approved')} className="px-3 py-2 rounded bg-green-600">قبول</button>
                       <button onClick={() => selected && updateStatus(selected, 'rejected')} className="px-3 py-2 rounded bg-red-600">رفض</button>
-                      <button onClick={() => setEditing(selected)} className="px-3 py-2 rounded bg-white/6">تعديل</button>
-                      <button onClick={() => setConfirmDelete(selected)} className="px-3 py-2 rounded bg-white/6">حذف</button>
+                      <button onClick={() => selected && setEditing(selected)} className="px-3 py-2 rounded bg-white/6">تعديل</button>
+                      <button onClick={() => selected && setConfirmDelete(selected)} className="px-3 py-2 rounded bg-white/6">حذف</button>
                     </div>
                   </div>
                 </div>
@@ -507,7 +539,6 @@ export default function AdminSeekerForm() {
           </div>
         )}
 
-        {/* Edit Modal */}
         {editing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60" onClick={() => setEditing(null)} />
@@ -517,72 +548,72 @@ export default function AdminSeekerForm() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-white/70">الاسم</label>
-                  <input value={editing?.name ?? ''} onChange={(e) => setEditing({ ...editing!, name: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.name ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), name: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
                 <div>
                   <label className="text-xs text-white/70">الهاتف</label>
-                  <input value={editing?.phone ?? ''} onChange={(e) => setEditing({ ...editing!, phone: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.phone ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), phone: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div>
                   <label className="text-xs text-white/70">المهنة</label>
-                  <input value={editing?.profession ?? ''} onChange={(e) => setEditing({ ...editing!, profession: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.profession ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), profession: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div>
                   <label className="text-xs text-white/70">مكان السكن</label>
-                  <input value={editing?.residence ?? ''} onChange={(e) => setEditing({ ...editing!, residence: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.residence ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), residence: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div>
                   <label className="text-xs text-white/70">العمر</label>
-                  <input type="number" value={editing?.age ?? ''} onChange={(e) => setEditing({ ...editing!, age: e.target.value ? Number(e.target.value) : null })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input type="number" value={editing?.age ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), age: e.target.value ? Number(e.target.value) : null })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div>
                   <label className="text-xs text-white/70">الشهادة</label>
-                  <input value={editing?.certificate ?? ''} onChange={(e) => setEditing({ ...editing!, certificate: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.certificate ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), certificate: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div>
                   <label className="text-xs text-white/70">الدولة</label>
-                  <input value={editing?.country ?? ''} onChange={(e) => setEditing({ ...editing!, country: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.country ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), country: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
                 <div>
                   <label className="text-xs text-white/70">المحافظة</label>
-                  <input value={editing?.province ?? ''} onChange={(e) => setEditing({ ...editing!, province: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.province ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), province: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div>
                   <label className="text-xs text-white/70">المدينة</label>
-                  <input value={editing?.city ?? ''} onChange={(e) => setEditing({ ...editing!, city: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.city ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), city: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
               </div>
 
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
                   <label className="text-xs text-white/70">رمز شام كاش</label>
-                  <input value={editing?.payment_code ?? ''} onChange={(e) => setEditing({ ...editing!, payment_code: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.payment_code ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), payment_code: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="text-xs text-white/70">معرف USDT (TXID)</label>
-                  <input value={editing?.transaction_id ?? ''} onChange={(e) => setEditing({ ...editing!, transaction_id: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.transaction_id ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), transaction_id: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="text-xs text-white/70">الموقع (lat,lng)</label>
-                  <input value={editing?.location ?? ''} onChange={(e) => setEditing({ ...editing!, location: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.location ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), location: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="text-xs text-white/70">رابط الصورة</label>
-                  <input value={editing?.image_url ?? ''} onChange={(e) => setEditing({ ...editing!, image_url: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
+                  <input value={editing?.image_url ?? ''} onChange={(e) => setEditing({ ...(editing as Seeker), image_url: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
 
                 <div className="md:col-span-2">
                   <label className="text-xs text-white/70">الحالة</label>
-                  <select value={editing?.status ?? 'pending'} onChange={(e) => setEditing({ ...editing!, status: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6">
+                  <select value={editing?.status ?? 'pending'} onChange={(e) => setEditing({ ...(editing as Seeker), status: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6">
                     <option value="pending">قيد المراجعة</option>
                     <option value="approved">مقبول</option>
                     <option value="rejected">مرفوض</option>
@@ -603,10 +634,10 @@ export default function AdminSeekerForm() {
             <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmDelete(null)} />
             <div className="relative w-full max-w-md bg-[#06161a] border border-white/6 rounded-lg p-4 z-10 shadow-xl">
               <h4 className="text-lg font-bold">تأكيد حذف السجل</h4>
-              <p className="mt-2 text-sm text-white/70">هل أنت متأكد من حذف سجل: <span className="font-medium">{confirmDelete.name}</span>؟</p>
+              <p className="mt-2 text-sm text-white/70">هل أنت متأكد من حذف سجل: <span className="font-medium">{confirmDelete?.name ?? ''}</span>؟</p>
               <div className="mt-4 flex justify-end gap-2">
                 <button onClick={() => setConfirmDelete(null)} className="px-3 py-2 rounded bg-white/6">إلغاء</button>
-                <button onClick={() => deleteRow(confirmDelete)} className="px-3 py-2 rounded bg-red-600">حذف</button>
+                <button onClick={() => confirmDelete && deleteRow(confirmDelete)} className="px-3 py-2 rounded bg-red-600">حذف</button>
               </div>
             </div>
           </div>
