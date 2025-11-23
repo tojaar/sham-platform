@@ -37,7 +37,7 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-export default function admindashboardForm() {
+export default function AdminDashboardForm() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
