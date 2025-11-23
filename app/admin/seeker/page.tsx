@@ -25,7 +25,7 @@ type Seeker = {
   payment_code?: string | null;
   transaction_id?: string | null;
   status?: string | null; // 'pending' | 'approved' | 'rejected'
-  approved?: boolean | null; // boolean mirror for some schemas
+  approved?: boolean | null;
   created_at?: string | null;
   image_url?: string | null;
   location?: string | null; // "lat,lng"
@@ -49,11 +49,10 @@ export default function AdminSeekerForm() {
   const [editing, setEditing] = useState<Seeker | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Seeker | null>(null);
   const [batchSelection, setBatchSelection] = useState<Record<string, boolean>>({});
-  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({}); // prevent double clicks per row
+  const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchRows();
-    // cleanup on unmount
     return () => { document.body.style.overflow = ''; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, filterStatus, sortBy, sortDir, page, pageSize]);
@@ -79,7 +78,7 @@ export default function AdminSeekerForm() {
 
       const { data, error: qbError, count } = await qb;
       if (qbError) throw qbError;
-      setRows(data || []);
+      setRows(data ?? []);
       setTotalCount(typeof count === 'number' ? count : null);
     } catch (err: any) {
       console.error('fetchRows', err);
@@ -108,23 +107,20 @@ export default function AdminSeekerForm() {
   }
 
   // --- Single row operations (robust update with rollback) ---
-  // We update both status (string) and approved (boolean|null) to keep schema variants consistent.
   async function updateStatus(row: Seeker, status: 'approved' | 'rejected' | 'pending') {
     setError(null);
     if (!row?.id) return;
     if (busyIds[row.id]) return;
     setBusy(row.id, true);
 
-    // determine approved boolean: approved -> true, rejected -> false, pending -> null
     const approvedValue = status === 'approved' ? true : status === 'rejected' ? false : null;
     const prevRow = rows.find(r => r.id === row.id) ?? null;
 
-    // optimistic update
     setRows(prev => prev.map(p => p.id === row.id ? { ...p, status, approved: approvedValue } : p));
     if (selected && selected.id === row.id) setSelected({ ...selected, status, approved: approvedValue });
 
     try {
-      const payload: any = { status, approved: approvedValue };
+      const payload: Partial<Seeker> = { status, approved: approvedValue };
       const { data, error } = await supabase
         .from('seeker_requests')
         .update(payload)
@@ -134,16 +130,12 @@ export default function AdminSeekerForm() {
 
       if (error) throw error;
 
-      // If server returned updated row, sync to what's returned
       if (data) {
         setRows(prev => prev.map(p => p.id === row.id ? { ...p, ...data } : p));
         if (selected && selected.id === row.id) setSelected({ ...selected, ...data });
-      } else {
-        // otherwise, ensure local state matches payload (already set optimistically)
       }
     } catch (err: any) {
       console.error('updateStatus', err);
-      // rollback to previous state
       if (prevRow) {
         setRows(prev => prev.map(p => p.id === prevRow.id ? prevRow : p));
         if (selected && selected.id === prevRow.id) setSelected(prevRow);
@@ -179,7 +171,7 @@ export default function AdminSeekerForm() {
     if (!edited.id) return setError('السجل غير صالح');
     setBusy(edited.id, true);
     try {
-      const payload: any = {
+      const payload: Partial<Seeker> = {
         name: edited.name ?? null,
         phone: edited.phone ?? null,
         profession: edited.profession ?? null,
@@ -192,7 +184,6 @@ export default function AdminSeekerForm() {
         payment_code: edited.payment_code ?? null,
         transaction_id: edited.transaction_id ?? null,
         status: edited.status ?? 'pending',
-        // keep approved in sync with status
         approved: edited.status === 'approved' ? true : edited.status === 'rejected' ? false : null,
         image_url: edited.image_url ?? null,
         location: edited.location ?? null,
@@ -227,7 +218,6 @@ export default function AdminSeekerForm() {
       if (error) throw error;
       setRows(prev => prev.map(p => ids.includes(p.id) ? { ...p, ...payload } : p));
       setBatchSelection({});
-      // if selected is in the batch, sync it
       if (selected && ids.includes(selected.id)) setSelected({ ...selected, ...payload });
     } catch (err: any) {
       console.error('batchApprove', err);
@@ -373,7 +363,9 @@ export default function AdminSeekerForm() {
                   </div>
 
                   <div className="px-4 py-3 border-b border-white/6 flex items-center justify-center">
-                    <span className={`px-2 py-1 rounded text-xs ${r.status === 'approved' ? 'bg-green-700' : r.status === 'rejected' ? 'bg-red-700' : 'bg-yellow-600 text-black'}`}>
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${r.status === 'approved' ? 'bg-green-700' : r.status === 'rejected' ? 'bg-red-700' : 'bg-yellow-600 text-black'}`}
+                    >
                       {r.status ?? 'pending'}
                     </span>
                   </div>
@@ -477,25 +469,29 @@ export default function AdminSeekerForm() {
                 </div>
 
                 <div className="md:col-span-2">
-                  {parseLocation(selected.location) ? (
-                    <div className="w-full h-64 rounded overflow-hidden border border-white/6">
-                      <MapContainer
-                        center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
-                        zoom={13}
-                        style={{ height: '100%', width: '100%' }}
-                        scrollWheelZoom={false}
-                      >
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                        <Marker position={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}>
-                          <Popup>
-                            {selected.name} <br /> {selected.location}
-                          </Popup>
-                        </Marker>
-                      </MapContainer>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-64 bg-white/5 rounded">لا توجد إحداثيات صحيحة للعرض</div>
-                  )}
+                  {(() => {
+                    const loc = parseLocation(selected.location);
+                    if (loc) {
+                      return (
+                        <div className="w-full h-64 rounded overflow-hidden border border-white/6">
+                          <MapContainer
+                            center={[loc.lat, loc.lng]}
+                            zoom={13}
+                            style={{ height: '100%', width: '100%' }}
+                            scrollWheelZoom={false}
+                          >
+                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                            <Marker position={[loc.lat, loc.lng]}>
+                              <Popup>
+                                {selected.name} <br /> {selected.location}
+                              </Popup>
+                            </Marker>
+                          </MapContainer>
+                        </div>
+                      );
+                    }
+                    return <div className="flex items-center justify-center h-64 bg-white/5 rounded">لا توجد إحداثيات صحيحة للعرض</div>;
+                  })()}
 
                   <div className="mt-4">
                     <div className="flex gap-2 flex-wrap">
@@ -561,12 +557,9 @@ export default function AdminSeekerForm() {
                   <label className="text-xs text-white/70">المدينة</label>
                   <input value={editing?.city ?? ''} onChange={(e) => setEditing({ ...editing!, city: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
                 </div>
+              </div>
 
-                <div>
-                  <label className="text-xs text-white/70">المهنة (مكرر)</label>
-                  <input value={editing?.profession ?? ''} onChange={(e) => setEditing({ ...editing!, profession: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
-                </div>
-
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
                   <label className="text-xs text-white/70">رمز شام كاش</label>
                   <input value={editing?.payment_code ?? ''} onChange={(e) => setEditing({ ...editing!, payment_code: e.target.value })} className="w-full px-3 py-2 rounded bg-[#07141a] border border-white/6" />
