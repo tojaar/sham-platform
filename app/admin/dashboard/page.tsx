@@ -37,7 +37,7 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-export default function AdminDashboardForm() {
+export default function admindashboardForm() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -61,12 +61,16 @@ export default function AdminDashboardForm() {
       const j = await resp.json();
       if (!resp.ok) { setError(j?.message || j?.error || 'فشل التحميل'); setMembers([]); }
       else { setMembers(j.members || []); setCount(j.count || 0); }
-    } catch (err: any) { setError(String(err?.message || err)); setMembers([]); }
-    finally { setLoading(false); }
+    } catch (err: unknown) {
+      // آمن للتعامل مع أي خطأ من نوع unknown
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || 'خطأ غير معروف');
+      setMembers([]);
+    } finally { setLoading(false); }
   }
 
   async function quickAction(id: string, action: 'approve' | 'reject' | 'delete') {
-    if (!confirm(`هل أنت متأكد من ${action} لهذا العضو؟`)) return;
+    if (!confirm(` أنت متأكد من ${action} لهذا العضو؟`)) return;
 
     try {
       const resp = await fetch(`/api/admin/members/${id}`, {
@@ -75,7 +79,10 @@ export default function AdminDashboardForm() {
       const j = await resp.json();
       if (!resp.ok) alert(j?.message || j?.error || 'فشل العملية');
       else fetchMembers();
-    } catch { alert('خطأ في الشبكة'); }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(msg || 'خطأ في الشبكة');
+    }
   }
 
   return (
