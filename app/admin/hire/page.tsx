@@ -36,6 +36,57 @@ type Hire = {
   [key: string]: unknown;
 };
 
+/* ---------- Safe helpers (no any) ---------- */
+
+function toStringSafe(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return null;
+  }
+}
+
+function toNumberSafe(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const n = Number(v.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === 'object' && x !== null && !Array.isArray(x);
+}
+
+function extractLatLng(obj: unknown): { lat: number; lng: number } | null {
+  if (!isRecord(obj)) return null;
+  const o = obj as Record<string, unknown>;
+  const latKeys = ['lat', 'latitude', 'lat_val', 'latitud', '0'];
+  const lngKeys = ['lng', 'longitude', 'lng_val', 'longitud', '1'];
+
+  for (const lk of latKeys) {
+    for (const rk of lngKeys) {
+      const lat = toNumberSafe(o[lk]);
+      const lng = toNumberSafe(o[rk]);
+      if (lat !== null && lng !== null) return { lat, lng };
+    }
+  }
+
+  // try common keys
+  const lat = toNumberSafe(o['lat']);
+  const lng = toNumberSafe(o['lng']);
+  if (lat !== null && lng !== null) return { lat, lng };
+
+  return null;
+}
+
+/* ---------- Component ---------- */
+
 export default function AdminHirePage() {
   const [hires, setHires] = useState<Hire[]>([]);
   const [search, setSearch] = useState('');
@@ -48,70 +99,71 @@ export default function AdminHirePage() {
   const [viewMode, setViewMode] = useState<'cards' | 'table' | 'list'>('cards');
   const inputStyle = "w-full p-2 bg-gray-800 border border-cyan-500 rounded";
 
-  // Normalize a record from Supabase into our Hire shape (handles alternate field names)
-  const normalize = (raw: Record<string, unknown>): Hire => {
+  /* Normalize a raw record into Hire without using any */
+  const normalize = (rawIn: Record<string, unknown>): Hire => {
+    const raw = rawIn ?? {};
+
     const imageCandidates = [
-      raw.image_url as string | undefined,
-      raw.image as string | undefined,
-      raw.photo as string | undefined,
-      raw.img as string | undefined,
-      raw.picture as string | undefined
-    ];
+      toStringSafe(raw.image_url),
+      toStringSafe(raw.image),
+      toStringSafe(raw.photo),
+      toStringSafe(raw.img),
+      toStringSafe(raw.picture),
+    ].filter(Boolean) as string[];
+
     const paymentId =
-      (raw.payment_id as string | undefined) ||
-      (raw.transaction_id as string | undefined) ||
-      (raw.tx_id as string | undefined) ||
-      (raw.usdt_id as string | undefined) ||
+      toStringSafe(raw.payment_id) ??
+      toStringSafe(raw.transaction_id) ??
+      toStringSafe(raw.tx_id) ??
+      toStringSafe(raw.usdt_id) ??
       null;
+
     const locationRaw =
-      (raw.location as string | Record<string, unknown> | undefined) ||
-      (raw.map_location as string | Record<string, unknown> | undefined) ||
-      (raw.map as string | Record<string, unknown> | undefined) ||
-      (raw.latlng as string | Record<string, unknown> | undefined) ||
-      (raw.mapLocation as string | Record<string, unknown> | undefined) ||
+      raw.location ??
+      raw.map_location ??
+      raw.map ??
+      raw.latlng ??
+      raw.mapLocation ??
       null;
 
     const locationStr =
       typeof locationRaw === 'string'
         ? locationRaw
-        : locationRaw && typeof locationRaw === 'object' && 'lat' in locationRaw && 'lng' in locationRaw
-        ? `${(locationRaw as any).lat},${(locationRaw as any).lng}`
+        : extractLatLng(locationRaw)
+        ? `${extractLatLng(locationRaw)!.lat},${extractLatLng(locationRaw)!.lng}`
         : null;
 
-    const salaryVal =
-      (raw.salary as number | undefined) ??
-      (raw.age as number | undefined) ??
-      null;
+    const salaryVal = toNumberSafe(raw.salary) ?? toNumberSafe(raw.age) ?? null;
 
     return {
       id: String(raw.id ?? ''),
-      name: (raw.name as string | undefined) ?? (raw.full_name as string | undefined) ?? (raw.title as string | undefined) ?? null,
-      phone: (raw.phone as string | undefined) ?? (raw.mobile as string | undefined) ?? (raw.contact as string | undefined) ?? null,
-      salary: typeof salaryVal === 'number' ? salaryVal : null,
-      profession: (raw.profession as string | undefined) ?? (raw.job_type as string | undefined) ?? null,
-      certificates: (raw.certificates as string | undefined) ?? (raw.certs as string | undefined) ?? null,
-      country: (raw.country as string | undefined) ?? null,
-      province: (raw.province as string | undefined) ?? null,
-      city: (raw.city as string | undefined) ?? null,
-      job_location: (raw.address as string | undefined) ?? (raw.place as string | undefined) ?? null,
+      name: toStringSafe(raw.name) ?? toStringSafe(raw.full_name) ?? toStringSafe(raw.title) ?? null,
+      phone: toStringSafe(raw.phone) ?? toStringSafe(raw.mobile) ?? toStringSafe(raw.contact) ?? null,
+      salary: salaryVal,
+      profession: toStringSafe(raw.profession) ?? toStringSafe(raw.job_type) ?? null,
+      certificates: toStringSafe(raw.certificates) ?? toStringSafe(raw.certs) ?? null,
+      country: toStringSafe(raw.country) ?? null,
+      province: toStringSafe(raw.province) ?? null,
+      city: toStringSafe(raw.city) ?? null,
+      job_location: toStringSafe(raw.address) ?? toStringSafe(raw.place) ?? null,
       location: locationStr,
       map_location: typeof locationRaw === 'string' ? locationRaw : null,
-      payment_code: (raw.payment_code as string | undefined) ?? (raw.sham_code as string | undefined) ?? null,
+      payment_code: toStringSafe(raw.payment_code) ?? toStringSafe(raw.sham_code) ?? null,
       payment_id: paymentId ?? null,
-      transaction_id: (raw.transaction_id as string | undefined) ?? null,
-      approved: typeof raw.approved === 'boolean' ? (raw.approved as boolean) : null,
-      created_at: (raw.created_at as string | undefined) ?? null,
-      image_url: imageCandidates.find((x) => !!x) ?? null,
-      description: (raw.description as string | undefined) ?? (raw.details as string | undefined) ?? null,
+      transaction_id: toStringSafe(raw.transaction_id) ?? null,
+      approved: typeof raw.approved === 'boolean' ? raw.approved : null,
+      created_at: toStringSafe(raw.created_at) ?? null,
+      image_url: imageCandidates.length > 0 ? imageCandidates[0] : null,
+      description: toStringSafe(raw.description) ?? toStringSafe(raw.details) ?? null,
       ...raw,
     } as Hire;
   };
 
-  const fetchHires = async () => {
+  /* Fetch */
+  const fetchHires = async (): Promise<void> => {
     setLoading(true);
     setMessage(null);
     try {
-      // request all fields; normalize after receiving
       const { data, error } = await supabase
         .from('hire_requests')
         .select('*')
@@ -134,10 +186,12 @@ export default function AdminHirePage() {
 
   useEffect(() => {
     fetchHires();
+    // intentionally stable dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleAction = async (id: string, action: 'approve' | 'reject' | 'delete') => {
+  /* Actions */
+  const handleAction = async (id: string, action: 'approve' | 'reject' | 'delete'): Promise<void> => {
     setMessage(null);
     try {
       setLoading(true);
@@ -166,19 +220,18 @@ export default function AdminHirePage() {
     }
   };
 
-  const handleEdit = (item: Hire) => {
+  const handleEdit = (item: Hire): void => {
     setEditId(item.id);
     setEditData({ ...item });
     setMessage(null);
   };
 
-  const saveEdit = async () => {
+  const saveEdit = async (): Promise<void> => {
     if (!editId) return;
     setMessage(null);
     try {
       setLoading(true);
       const payload: Record<string, unknown> = { ...editData };
-      // convert empty strings to null to avoid DB issues
       Object.keys(payload).forEach((k) => {
         if (payload[k] === '') payload[k] = null;
       });
@@ -196,10 +249,10 @@ export default function AdminHirePage() {
     }
   };
 
+  /* Location parsing */
   const parseLocation = (loc?: string | null) => {
     if (!loc) return null;
     const str = String(loc).trim();
-    // try forms: "lat,lng" or "lat lng" or object-like "lat:...,lng:..."
     const parts = str.includes(',') ? str.split(',') : str.split(/\s+/);
     if (parts.length < 2) return null;
     const lat = Number(parts[0]);
@@ -208,7 +261,7 @@ export default function AdminHirePage() {
     return { lat, lng };
   };
 
-  // filter & search
+  /* Filter & search */
   const filtered = hires
     .filter((item) => {
       if (!search) return true;
@@ -231,13 +284,12 @@ export default function AdminHirePage() {
       return true;
     });
 
-  // small helper: safe image URL (http/https)
+  /* Safe image helper */
   const safeImage = (url?: string | null) => {
     if (!url) return null;
     try {
       const u = String(url).trim();
       if (u.startsWith('http://') || u.startsWith('https://')) return decodeURI(u);
-      // support data: URIs
       if (u.startsWith('data:')) return u;
       return null;
     } catch {
@@ -245,6 +297,7 @@ export default function AdminHirePage() {
     }
   };
 
+  /* ---------- Render ---------- */
   return (
     <main className="min-h-screen bg-[#0f172a] text-white p-6 font-sans">
       <header className="max-w-6xl mx-auto mb-6">
