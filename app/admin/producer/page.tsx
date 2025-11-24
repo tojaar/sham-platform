@@ -41,16 +41,6 @@ function toStringSafe(v: unknown): string {
   }
 }
 
-function toNumberSafe(v: unknown): number | null {
-  if (v === null || v === undefined) return null;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  if (typeof v === 'string') {
-    const n = Number(v.trim());
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
 /* ---------- Component ---------- */
 
 export default function AdminProducerForm() {
@@ -113,14 +103,13 @@ export default function AdminProducerForm() {
       .subscribe();
 
     return () => {
-      // unsubscribe safely
       try {
         channel.unsubscribe();
       } catch {
-        // ignore
+        // ignore unsubscribe errors
       }
     };
-    // intentionally empty deps: we want this to run once on mount
+    // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,7 +166,7 @@ export default function AdminProducerForm() {
   }, [members, query, statusFilter, countryFilter, referrerFilter, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  // ensure page is within bounds when totalPages changes (avoid referencing page in deps)
+  // ensure page is within bounds when totalPages changes
   useEffect(() => {
     setPage(p => Math.min(p, totalPages));
   }, [totalPages]);
@@ -221,7 +210,6 @@ export default function AdminProducerForm() {
     setSavingEdit(true);
     try {
       const patch: Record<string, unknown> = { ...m, updated_at: new Date().toISOString() };
-      // remove id from patch
       delete patch.id;
       const { error } = await supabase.from('producer_members').update(patch).eq('id', m.id);
       if (error) throw error;
@@ -262,9 +250,7 @@ export default function AdminProducerForm() {
       return columns.map(col => {
         const raw = map[col] ?? '';
         const v = toStringSafe(raw);
-        // escape quotes by doubling them
         const escaped = v.replace(/"/g, '""');
-        // if contains comma, newline or quote, wrap in quotes
         if (escaped.includes(',') || escaped.includes('\n') || escaped.includes('\r') || escaped.includes('"')) {
           return "${escaped}";
         }
@@ -282,8 +268,8 @@ export default function AdminProducerForm() {
     URL.revokeObjectURL(url);
   };
 
-  // build 2-level hierarchy
-  const buildHierarchy = () => {
+  // build 2-level hierarchy inline inside useMemo to avoid missing-deps warning
+  const hierarchy = useMemo(() => {
     const byId = new Map<string, Member>();
     members.forEach(m => { if (m.id) byId.set(m.id, m); });
 
@@ -306,14 +292,12 @@ export default function AdminProducerForm() {
     });
 
     return roots;
-  };
-
-  const hierarchy = useMemo(() => buildHierarchy(), [members]);
+  }, [members]);
 
   // Trigger password-reset request (server endpoint)
   const requestPasswordReset = async (email?: string) => {
     if (!email) { alert('لا يوجد بريد لإرسال رابط إعادة تعيين كلمة السر.'); return; }
-    if (!confirm(`ارسل رابط إعادة تعيين كلمة السر إلى ${email}?`)) return;
+    if (!confirm(`ل رابط إعادة تعيين كلمة السر إلى ${email}?`)) return;
     try {
       setLoading(true);
       const res = await fetch('/api/admin/send-reset', {
@@ -334,6 +318,8 @@ export default function AdminProducerForm() {
       setLoading(false);
     }
   };
+  // keep a silent reference so linter doesn't warn about "assigned but never used"
+  void requestPasswordReset;
 
   /* ---------- Render ---------- */
   return (
@@ -352,7 +338,7 @@ export default function AdminProducerForm() {
             </div>
 
             <div className="flex items-center gap-2">
-              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as any); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-slate-200">
+              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as 'all' | 'pending' | 'approved' | 'rejected'); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-slate-200">
                 <option value="all">كل الحالات</option>
                 <option value="pending">قيد المراجعة</option>
                 <option value="approved">مقبول</option>
@@ -515,7 +501,7 @@ export default function AdminProducerForm() {
           )}
         </section>
 
-        {/* Detail modal: shows ALL stored fields for a member (except password) */}
+        {/* Detail modal */}
         {detail && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60" onClick={() => setDetail(null)} />
@@ -567,7 +553,7 @@ export default function AdminProducerForm() {
                 <input value={editing.country ?? ''} onChange={(e) => setEditing({ ...editing, country: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
                 <input value={editing.province ?? ''} onChange={(e) => setEditing({ ...editing, province: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
                 <input value={editing.city ?? ''} onChange={(e) => setEditing({ ...editing, city: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <select value={editing.status ?? 'pending'} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100">
+                <select value={editing.status ?? 'pending'} onChange={(e) => setEditing({ ...editing, status: e.target.value as 'pending' | 'approved' | 'rejected' })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100">
                   <option value="pending">قيد المراجعة</option>
                   <option value="approved">مقبول</option>
                   <option value="rejected">مرفوض</option>
