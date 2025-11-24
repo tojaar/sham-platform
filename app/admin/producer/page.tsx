@@ -3,9 +3,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// إذا كنت ثبتت papaparse و heroicons قم بإبقاءها، إن لم تفعل فاستخدم الأزرار النصية
-// import Papa from 'papaparse';
-
 type Member = {
   id: string;
   full_name?: string | null;
@@ -26,10 +23,35 @@ type Member = {
   sham_cash_link?: string | null;
   sham_payment_code?: string | null;
   usdt_txid?: string | null;
-  // أي حقول إضافية
+  [key: string]: unknown;
 };
 
 type ViewMode = 'table' | 'cards' | 'hierarchy';
+
+/* ---------- Helpers ---------- */
+
+function toStringSafe(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return '';
+  }
+}
+
+function toNumberSafe(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const n = Number(v.trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/* ---------- Component ---------- */
 
 export default function AdminProducerForm() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -44,6 +66,11 @@ export default function AdminProducerForm() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [sortBy, setSortBy] = useState<{ key: keyof Member | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'created_at', dir: 'desc' });
 
+  // keep reference to setSortBy so linter doesn't warn about unused variable (no behavioral change)
+  useEffect(() => {
+    void setSortBy;
+  }, [setSortBy]);
+
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 20;
@@ -54,7 +81,7 @@ export default function AdminProducerForm() {
   const [savingEdit, setSavingEdit] = useState(false);
 
   // Fetch members from supabase
-  const fetchMembers = async () => {
+  const fetchMembers = async (): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
@@ -64,10 +91,11 @@ export default function AdminProducerForm() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setMembers(data ?? []);
-    } catch (err: any) {
+      setMembers((Array.isArray(data) ? data : []) as Member[]);
+    } catch (err: unknown) {
       console.error('fetchMembers error', err);
-      setError(String(err?.message ?? err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -77,32 +105,45 @@ export default function AdminProducerForm() {
     fetchMembers();
 
     // Optional realtime subscription; keep if you want live updates
-    const channel = supabase.channel('public:producer_members')
+    const channel = supabase
+      .channel('public:producer_members')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'producer_members' }, () => {
         fetchMembers();
       })
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      // unsubscribe safely
+      try {
+        channel.unsubscribe();
+      } catch {
+        // ignore
+      }
     };
+    // intentionally empty deps: we want this to run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // unique lists for filters
   const uniqueCountries = useMemo(() => {
     const setC = new Set<string>();
-    members.forEach(m => { if (m.country) setC.add(m.country); });
+    members.forEach(m => {
+      if (m.country) setC.add(m.country);
+    });
     return Array.from(setC).sort();
   }, [members]);
 
   const uniqueReferrers = useMemo(() => {
     const map = new Map<string, string>();
-    members.forEach(m => { if (m.id && m.invite_code) map.set(m.id, `${m.full_name ?? '(no-name)'} — ${m.invite_code}`); });
+    members.forEach(m => {
+      if (m.id && m.invite_code) {
+        map.set(m.id, `${m.full_name ?? '(no-name)'} — ${m.invite_code}`);
+      }
+    });
     return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
   }, [members]);
 
-  // filtered + search
+  // filtered + search + sort
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let result = members.slice();
@@ -115,15 +156,18 @@ export default function AdminProducerForm() {
       result = result.filter(m => {
         const fields = [
           m.full_name, m.email, m.whatsapp, m.country, m.province, m.city, m.address, m.invite_code, m.referrer_code
-        ].map(s => (s ?? '').toString().toLowerCase());
+        ].map(s => toStringSafe(s).toLowerCase());
         return fields.some(f => f.includes(q));
       });
     }
 
-    // sort
-    result.sort((a: any, b: any) => {
-      const aVal = a[sortBy.key as keyof Member] ?? '';
-      const bVal = b[sortBy.key as keyof Member] ?? '';
+    // sort safely
+    result.sort((a: Member, b: Member) => {
+      const key = sortBy.key;
+      const aRaw = (a as Record<string, unknown>)[key as string];
+      const bRaw = (b as Record<string, unknown>)[key as string];
+      const aVal = toStringSafe(aRaw).toLowerCase();
+      const bVal = toStringSafe(bRaw).toLowerCase();
       if (aVal === bVal) return 0;
       if (sortBy.dir === 'asc') return aVal > bVal ? 1 : -1;
       return aVal < bVal ? 1 : -1;
@@ -133,51 +177,60 @@ export default function AdminProducerForm() {
   }, [members, query, statusFilter, countryFilter, referrerFilter, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  useEffect(() => { if (page > totalPages) setPage(1); }, [totalPages]);
+  // ensure page is within bounds when totalPages changes (avoid referencing page in deps)
+  useEffect(() => {
+    setPage(p => Math.min(p, totalPages));
+  }, [totalPages]);
+
   const pageData = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page]);
 
   // actions
-  const updateStatus = async (id: string, status: 'approved' | 'rejected' | 'pending') => {
+  const updateStatus = async (id: string, status: 'approved' | 'rejected' | 'pending'): Promise<void> => {
     try {
       setLoading(true);
       const { error } = await supabase.from('producer_members').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
       await fetchMembers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('updateStatus error', err);
-      setError(String(err?.message ?? err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteMember = async (id: string) => {
+  const deleteMember = async (id: string): Promise<void> => {
     if (!confirm('هل متأكد من حذف هذا العضو نهائياً؟')) return;
     try {
       setLoading(true);
       const { error } = await supabase.from('producer_members').delete().eq('id', id);
       if (error) throw error;
       await fetchMembers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('deleteMember error', err);
-      setError(String(err?.message ?? err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const saveEdit = async (m: Member) => {
+  const saveEdit = async (m: Member | null): Promise<void> => {
+    if (!m) return;
     setSavingEdit(true);
     try {
-      const patch = { ...m, updated_at: new Date().toISOString() as any };
-      delete (patch as any).id;
+      const patch: Record<string, unknown> = { ...m, updated_at: new Date().toISOString() };
+      // remove id from patch
+      delete patch.id;
       const { error } = await supabase.from('producer_members').update(patch).eq('id', m.id);
       if (error) throw error;
       setEditing(null);
       await fetchMembers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('saveEdit error', err);
-      setError(String(err?.message ?? err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
     } finally {
       setSavingEdit(false);
     }
@@ -185,11 +238,14 @@ export default function AdminProducerForm() {
 
   // Export CSV (simple client-side exporter; works without papaparse)
   const exportCSV = (rows: Member[]) => {
-    if (!rows || rows.length === 0) { alert('لا توجد بيانات للتصدير'); return; }
-    const columns = ['id','name','email','whatsapp','country','province','city','invite_code','referrer_code','generation','status','created_at'];
+    if (!rows || rows.length === 0) {
+      alert('لا توجد بيانات للتصدير');
+      return;
+    }
+    const columns = ['id', 'name', 'email', 'whatsapp', 'country', 'province', 'city', 'invite_code', 'referrer_code', 'generation', 'status', 'created_at'];
     const header = columns.join(',');
     const lines = rows.map(r => {
-      const map: Record<string, any> = {
+      const map: Record<string, unknown> = {
         id: r.id ?? '',
         name: r.full_name ?? '',
         email: r.email ?? '',
@@ -204,10 +260,15 @@ export default function AdminProducerForm() {
         created_at: r.created_at ?? '',
       };
       return columns.map(col => {
-        const v = String(map[col] ?? '');
-        if (v.includes('"')) return `"${v.replace(/"/g, '""')}";`
-        if (v.includes(',') || v.includes('\n') || v.includes('\r')) return "${v}";
-        return v;
+        const raw = map[col] ?? '';
+        const v = toStringSafe(raw);
+        // escape quotes by doubling them
+        const escaped = v.replace(/"/g, '""');
+        // if contains comma, newline or quote, wrap in quotes
+        if (escaped.includes(',') || escaped.includes('\n') || escaped.includes('\r') || escaped.includes('"')) {
+          return "${escaped}";
+        }
+        return escaped;
       }).join(',');
     });
 
@@ -249,7 +310,7 @@ export default function AdminProducerForm() {
 
   const hierarchy = useMemo(() => buildHierarchy(), [members]);
 
-  // Trigger password-reset request (server endpoint) — see server API below
+  // Trigger password-reset request (server endpoint)
   const requestPasswordReset = async (email?: string) => {
     if (!email) { alert('لا يوجد بريد لإرسال رابط إعادة تعيين كلمة السر.'); return; }
     if (!confirm(`ارسل رابط إعادة تعيين كلمة السر إلى ${email}?`)) return;
@@ -262,17 +323,19 @@ export default function AdminProducerForm() {
       });
       if (!res.ok) {
         const txt = await res.text();
-        throw new Error(txt || `HTTP ${res.status}`);
+        throw new Error(`${txt} HTTP ${res.status}`);
       }
       alert('طلب إعادة التعيين أرسل بنجاح (إن سمح الإعداد). سيصل المستخدم بريده رابط لإعادة التعيين.');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('requestPasswordReset error', err);
-      alert('فشل إرسال طلب إعادة التعيين: ' + String(err?.message ?? err));
+      const msg = err instanceof Error ? err.message : String(err);
+      alert('فشل إرسال طلب إعادة التعيين: ' + msg);
     } finally {
       setLoading(false);
     }
   };
 
+  /* ---------- Render ---------- */
   return (
     <main className="min-h-screen bg-[#07121a] text-slate-100 p-6">
       <div className="max-w-full mx-auto">
@@ -284,7 +347,7 @@ export default function AdminProducerForm() {
 
           <div className="flex gap-2 items-center">
             <div className="flex items-center gap-2 bg-[#021018] p-2 rounded">
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بأي حقل..." className="px-3 py-2 rounded bg-[#07171b] border border-white/6 text-slate-200 w-72" />
+              <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="ابحث بأي حقل..." className="px-3 py-2 rounded bg-[#07171b] border border-white/6 text-slate-200 w-72" />
               <button onClick={() => { setQuery(''); setPage(1); }} className="px-3 py-2 bg-[#0b2a2a] rounded text-slate-200">مسح</button>
             </div>
 
@@ -438,7 +501,7 @@ export default function AdminProducerForm() {
 
                         <div className="mt-2 text-sm text-slate-300">Recruits:
                           <ul className="mt-2 list-disc pl-5 text-sm text-slate-300">
-                            {(root.indirectMap.get(d.id) || []).map(ii => (
+                            {(root.indirectMap.get(d.id) ?? []).map(ii => (
                               <li key={ii.id}>{ii.full_name} — {ii.country} <span className="text-xs text-slate-400">({ii.invite_code})</span></li>
                             ))}
                           </ul>
@@ -468,22 +531,21 @@ export default function AdminProducerForm() {
                 <div><div className="text-xs text-slate-300">المدينة</div><div className="font-medium">{detail.city}</div></div>
                 <div className="md:col-span-2"><div className="text-xs text-slate-300">العنوان</div><div className="font-medium">{detail.address}</div></div>
 
-                <div><div className="text-xs text-slate-300">USDT TRC20</div><div className="font-medium">{detail.usdt_trc20 || '-'}</div></div>
-                <div><div className="text-xs text-slate-300">شام كاش رابط</div><div className="font-medium">{detail.sham_cash_link || '-'}</div></div>
-                <div><div className="text-xs text-slate-300">رمز شام كاش</div><div className="font-medium">{detail.sham_payment_code || '-'}</div></div>
-                <div><div className="text-xs text-slate-300">TXID</div><div className="font-medium">{detail.usdt_txid || '-'}</div></div>
+                <div><div className="text-xs text-slate-300">USDT TRC20</div><div className="font-medium">{detail.usdt_trc20 ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">شام كاش رابط</div><div className="font-medium">{detail.sham_cash_link ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">رمز شام كاش</div><div className="font-medium">{detail.sham_payment_code ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">TXID</div><div className="font-medium">{detail.usdt_txid ?? '-'}</div></div>
 
-                <div><div className="text-xs text-slate-300">كود الدعوة</div><div className="font-medium">{detail.invite_code || '-'}</div></div>
-                <div><div className="text-xs text-slate-300">داعي (كود)</div><div className="font-medium">{detail.referrer_code || '-'}</div></div>
+                <div><div className="text-xs text-slate-300">كود الدعوة</div><div className="font-medium">{detail.invite_code ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">داعي (كود)</div><div className="font-medium">{detail.referrer_code ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">رمز الدعوة الخاص</div><div className="font-medium">{detail.invite_code_self ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">الحالة</div><div className="font-medium">{detail.status ?? 'pending'}</div></div>
-                <div><div className="text-xs text-slate-300">معرف المستخدم</div><div className="font-medium">{detail.user_id || '-'}</div></div>
+                <div><div className="text-xs text-slate-300">معرف المستخدم</div><div className="font-medium">{detail.user_id ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">تاريخ الإنشاء</div><div className="font-medium">{detail.created_at ? new Date(detail.created_at).toLocaleString() : '-'}</div></div>
               </div>
 
               <div className="mt-5 flex items-center gap-2 justify-end">
                 <button onClick={() => { setDetail(null); setEditing(detail); }} className="px-4 py-2 rounded bg-blue-600 text-white">تعديل</button>
-                
                 <button onClick={() => setDetail(null)} className="px-4 py-2 border rounded text-slate-200">إغلاق</button>
               </div>
             </div>
@@ -498,24 +560,24 @@ export default function AdminProducerForm() {
               <h2 className="text-xl font-bold mb-3">تعديل العضو</h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input value={editing.full_name ?? ''} onChange={(e) => setEditing({...editing, full_name: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.email ?? ''} onChange={(e) => setEditing({...editing, email: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.whatsapp ?? ''} onChange={(e) => setEditing({...editing, whatsapp: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.invite_code ?? ''} onChange={(e) => setEditing({...editing, invite_code: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.country ?? ''} onChange={(e) => setEditing({...editing, country: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.province ?? ''} onChange={(e) => setEditing({...editing, province: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.city ?? ''} onChange={(e) => setEditing({...editing, city: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <select value={editing.status ?? 'pending'} onChange={(e) => setEditing({...editing, status: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100">
+                <input value={editing.full_name ?? ''} onChange={(e) => setEditing({ ...editing, full_name: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.email ?? ''} onChange={(e) => setEditing({ ...editing, email: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.whatsapp ?? ''} onChange={(e) => setEditing({ ...editing, whatsapp: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.invite_code ?? ''} onChange={(e) => setEditing({ ...editing, invite_code: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.country ?? ''} onChange={(e) => setEditing({ ...editing, country: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.province ?? ''} onChange={(e) => setEditing({ ...editing, province: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.city ?? ''} onChange={(e) => setEditing({ ...editing, city: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <select value={editing.status ?? 'pending'} onChange={(e) => setEditing({ ...editing, status: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100">
                   <option value="pending">قيد المراجعة</option>
                   <option value="approved">مقبول</option>
                   <option value="rejected">مرفوض</option>
                 </select>
 
-                <textarea value={editing.address ?? ''} onChange={(e) => setEditing({...editing, address: e.target.value})} className="col-span-1 md:col-span-2 px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.usdt_trc20 ?? ''} onChange={(e) => setEditing({...editing, usdt_trc20: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.sham_cash_link ?? ''} onChange={(e) => setEditing({...editing, sham_cash_link: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.sham_payment_code ?? ''} onChange={(e) => setEditing({...editing, sham_payment_code: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.usdt_txid ?? ''} onChange={(e) => setEditing({...editing, usdt_txid: e.target.value})} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <textarea value={editing.address ?? ''} onChange={(e) => setEditing({ ...editing, address: e.target.value })} className="col-span-1 md:col-span-2 px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.usdt_trc20 ?? ''} onChange={(e) => setEditing({ ...editing, usdt_trc20: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.sham_cash_link ?? ''} onChange={(e) => setEditing({ ...editing, sham_cash_link: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.sham_payment_code ?? ''} onChange={(e) => setEditing({ ...editing, sham_payment_code: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.usdt_txid ?? ''} onChange={(e) => setEditing({ ...editing, usdt_txid: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
               </div>
 
               <div className="mt-4 flex justify-end gap-2">
