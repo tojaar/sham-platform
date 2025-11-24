@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import 'leaflet/dist/leaflet.css';
@@ -32,7 +32,8 @@ type Hire = {
   image?: string | null; // alternate
   photo?: string | null; // alternate
   description?: string | null;
-  [key: string]: any;
+  certificates?: string | null;
+  [key: string]: unknown;
 };
 
 export default function AdminHirePage() {
@@ -48,30 +49,60 @@ export default function AdminHirePage() {
   const inputStyle = "w-full p-2 bg-gray-800 border border-cyan-500 rounded";
 
   // Normalize a record from Supabase into our Hire shape (handles alternate field names)
-  const normalize = (raw: any): Hire => {
-    const imageCandidates = [raw.image_url, raw.image, raw.photo, raw.img, raw.picture];
-    const paymentId = raw.payment_id || raw.transaction_id || raw.tx_id || raw.usdt_id;
-    const locationRaw = raw.location || raw.map_location || raw.map || raw.latlng || raw.mapLocation;
+  const normalize = (raw: Record<string, unknown>): Hire => {
+    const imageCandidates = [
+      raw.image_url as string | undefined,
+      raw.image as string | undefined,
+      raw.photo as string | undefined,
+      raw.img as string | undefined,
+      raw.picture as string | undefined
+    ];
+    const paymentId =
+      (raw.payment_id as string | undefined) ||
+      (raw.transaction_id as string | undefined) ||
+      (raw.tx_id as string | undefined) ||
+      (raw.usdt_id as string | undefined) ||
+      null;
+    const locationRaw =
+      (raw.location as string | Record<string, unknown> | undefined) ||
+      (raw.map_location as string | Record<string, unknown> | undefined) ||
+      (raw.map as string | Record<string, unknown> | undefined) ||
+      (raw.latlng as string | Record<string, unknown> | undefined) ||
+      (raw.mapLocation as string | Record<string, unknown> | undefined) ||
+      null;
+
+    const locationStr =
+      typeof locationRaw === 'string'
+        ? locationRaw
+        : locationRaw && typeof locationRaw === 'object' && 'lat' in locationRaw && 'lng' in locationRaw
+        ? `${(locationRaw as any).lat},${(locationRaw as any).lng}`
+        : null;
+
+    const salaryVal =
+      (raw.salary as number | undefined) ??
+      (raw.age as number | undefined) ??
+      null;
+
     return {
-      id: raw.id,
-      name: raw.name ?? raw.full_name ?? raw.title ?? null,
-      phone: raw.phone ?? raw.mobile ?? raw.contact ?? null,
-      salary: raw.age ?? null,
-      profession: raw.profession ?? raw.job_type ?? null,
-      certificates: raw.certificates ?? raw.certs ?? null,
-      country: raw.country ?? null,
-      province: raw.province ?? null,
-      city: raw.city ?? null,
-      job_location: raw.address ?? raw.place ?? null,
-      location: typeof locationRaw === 'string' ? locationRaw : (locationRaw ? `${locationRaw.lat},${locationRaw.lng}` : null),
-      map_location: typeof locationRaw === 'string' ? locationRaw : undefined,
-      payment_code: raw.payment_code ?? raw.sham_code ?? null,
+      id: String(raw.id ?? ''),
+      name: (raw.name as string | undefined) ?? (raw.full_name as string | undefined) ?? (raw.title as string | undefined) ?? null,
+      phone: (raw.phone as string | undefined) ?? (raw.mobile as string | undefined) ?? (raw.contact as string | undefined) ?? null,
+      salary: typeof salaryVal === 'number' ? salaryVal : null,
+      profession: (raw.profession as string | undefined) ?? (raw.job_type as string | undefined) ?? null,
+      certificates: (raw.certificates as string | undefined) ?? (raw.certs as string | undefined) ?? null,
+      country: (raw.country as string | undefined) ?? null,
+      province: (raw.province as string | undefined) ?? null,
+      city: (raw.city as string | undefined) ?? null,
+      job_location: (raw.address as string | undefined) ?? (raw.place as string | undefined) ?? null,
+      location: locationStr,
+      map_location: typeof locationRaw === 'string' ? locationRaw : null,
+      payment_code: (raw.payment_code as string | undefined) ?? (raw.sham_code as string | undefined) ?? null,
       payment_id: paymentId ?? null,
-      transaction_id: raw.transaction_id ?? null,
-      approved: raw.approved ?? null,
-      created_at: raw.created_at ?? null,
+      transaction_id: (raw.transaction_id as string | undefined) ?? null,
+      approved: typeof raw.approved === 'boolean' ? (raw.approved as boolean) : null,
+      created_at: (raw.created_at as string | undefined) ?? null,
       image_url: imageCandidates.find((x) => !!x) ?? null,
-      description: raw.description ?? raw.details ?? null,
+      description: (raw.description as string | undefined) ?? (raw.details as string | undefined) ?? null,
       ...raw,
     } as Hire;
   };
@@ -88,11 +119,13 @@ export default function AdminHirePage() {
         .range(0, 99999);
 
       if (error) throw error;
-      const normalized = (data || []).map(normalize);
+      const arr = Array.isArray(data) ? data : [];
+      const normalized = arr.map((d) => normalize(d as Record<string, unknown>));
       setHires(normalized);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('fetchHires error', err);
-      setMessage('خطأ في جلب البيانات: ' + (err?.message || String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage('خطأ في جلب البيانات: ' + msg);
       setHires([]);
     } finally {
       setLoading(false);
@@ -101,6 +134,7 @@ export default function AdminHirePage() {
 
   useEffect(() => {
     fetchHires();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAction = async (id: string, action: 'approve' | 'reject' | 'delete') => {
@@ -123,9 +157,10 @@ export default function AdminHirePage() {
       if (error) throw error;
       setMessage(approved ? 'تم قبول الطلب' : 'تم رفض الطلب');
       await fetchHires();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('handleAction error', err);
-      setMessage('فشل الإجراء: ' + (err?.message || String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage('فشل الإجراء: ' + msg);
     } finally {
       setLoading(false);
     }
@@ -142,7 +177,7 @@ export default function AdminHirePage() {
     setMessage(null);
     try {
       setLoading(true);
-      const payload: any = { ...editData };
+      const payload: Record<string, unknown> = { ...editData };
       // convert empty strings to null to avoid DB issues
       Object.keys(payload).forEach((k) => {
         if (payload[k] === '') payload[k] = null;
@@ -152,9 +187,10 @@ export default function AdminHirePage() {
       setMessage('تم حفظ التعديلات');
       setEditId(null);
       await fetchHires();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('saveEdit error', err);
-      setMessage('خطأ عند الحفظ: ' + (err?.message || String(err)));
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessage('خطأ عند الحفظ: ' + msg);
     } finally {
       setLoading(false);
     }
@@ -164,10 +200,10 @@ export default function AdminHirePage() {
     if (!loc) return null;
     const str = String(loc).trim();
     // try forms: "lat,lng" or "lat lng" or object-like "lat:...,lng:..."
-    const comma = str.includes(',') ? str.split(',') : str.split(/\s+/);
-    if (comma.length < 2) return null;
-    const lat = Number(comma[0]);
-    const lng = Number(comma[1]);
+    const parts = str.includes(',') ? str.split(',') : str.split(/\s+/);
+    if (parts.length < 2) return null;
+    const lat = Number(parts[0]);
+    const lng = Number(parts[1]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     return { lat, lng };
   };
@@ -225,7 +261,7 @@ export default function AdminHirePage() {
             />
             <select
               value={filter}
-              onChange={(e) => setFilter(e.target.value as any)}
+              onChange={(e) => setFilter(e.target.value as 'all' | 'approved' | 'pending' | 'rejected')}
               className="px-4 py-2 rounded bg-gray-900 text-white border border-cyan-500"
             >
               <option value="all">📋 عرض الكل</option>
@@ -256,14 +292,14 @@ export default function AdminHirePage() {
             {viewMode === 'cards' && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filtered.map((item) => {
-                  const image = safeImage(item.image_url ?? item.image ?? item.photo);
+                  const image = safeImage(item.image_url ?? (item.image as string | undefined) ?? (item.photo as string | undefined));
                   return (
                     <article key={item.id} className="bg-gray-900 border border-cyan-700 rounded-lg p-4 shadow-lg flex flex-col">
                       <div className="flex items-start gap-4">
                         <div className="w-20 h-20 rounded overflow-hidden flex-shrink-0 bg-gray-800 border border-white/5">
                           {image ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={image} alt={item.name || 'image'} className="w-full h-full object-cover" />
+                            <img src={image} alt={(item.name ?? 'image')} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">لا صورة</div>
                           )}
@@ -306,13 +342,13 @@ export default function AdminHirePage() {
             {viewMode === 'list' && (
               <div className="space-y-3">
                 {filtered.map((item) => {
-                  const image = safeImage(item.image_url ?? item.image ?? item.photo);
+                  const image = safeImage(item.image_url ?? (item.image as string | undefined) ?? (item.photo as string | undefined));
                   return (
                     <div key={item.id} className="bg-gray-900 border border-cyan-700 rounded-lg p-3 flex items-center gap-4">
                       <div className="w-16 h-16 rounded overflow-hidden bg-gray-800 border border-white/5">
                         {image ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={image} alt={item.name || 'image'} className="w-full h-full object-cover" />
+                          <img src={image} alt={(item.name ?? 'image')} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">لا صورة</div>
                         )}
@@ -354,14 +390,14 @@ export default function AdminHirePage() {
                   </thead>
                   <tbody>
                     {filtered.map((item, idx) => {
-                      const image = safeImage(item.image_url ?? item.image ?? item.photo);
+                      const image = safeImage(item.image_url ?? (item.image as string | undefined) ?? (item.photo as string | undefined));
                       return (
                         <tr key={item.id} className="border-t border-gray-800">
                           <td className="p-2">{idx + 1}</td>
                           <td className="p-2">
                             {image ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={image} alt={item.name || 'image'} className="w-16 h-10 object-cover rounded" />
+                              <img src={image} alt={(item.name ?? 'image')} className="w-16 h-10 object-cover rounded" />
                             ) : (
                               <div className="w-16 h-10 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-500">لا</div>
                             )}
@@ -398,20 +434,20 @@ export default function AdminHirePage() {
             <h2 className="text-xl font-bold mb-4 text-cyan-300">📝 تعديل طلب التوظيف</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input type="text" value={editData.name ?? ''} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className={inputStyle} placeholder="الاسم" />
-              <input type="text" value={editData.phone ?? ''} onChange={(e) => setEditData({ ...editData, phone: e.target.value })} className={inputStyle} placeholder="رقم الهاتف" />
-              <input type="number" value={editData.salary ?? ''} onChange={(e) => setEditData({ ...editData, age: e.target.value === '' ? null : parseInt(e.target.value, 10) })} className={inputStyle} placeholder="الراتب" />
-              <input type="text" value={editData.profession ?? ''} onChange={(e) => setEditData({ ...editData, profession: e.target.value })} className={inputStyle} placeholder="المهنة" />
-              <input type="text" value={editData.hours ?? ''} onChange={(e) => setEditData({ ...editData, hours: e.target.value })} className={inputStyle} placeholder="u]] عدد ساعات العمل" />
-              <input type="text" value={editData.countrhoursy ?? ''} onChange={(e) => setEditData({ ...editData, country: e.target.value })} className={inputStyle} placeholder="الدولة" />
-              <input type="text" value={editData.province ?? ''} onChange={(e) => setEditData({ ...editData, province: e.target.value })} className={inputStyle} placeholder="المحافظة" />
-              <input type="text" value={editData.city ?? ''} onChange={(e) => setEditData({ ...editData, city: e.target.value })} className={inputStyle} placeholder="المدينة" />
-              <input type="text" value={editData.job_location ?? ''} onChange={(e) => setEditData({ ...editData, job_location: e.target.value })} className={inputStyle} placeholder="مكان السكن" />
-              <input type="text" value={editData.location ?? ''} onChange={(e) => setEditData({ ...editData, location: e.target.value })} className={inputStyle} placeholder="الموقع (lat,lng)" />
-              <input type="text" value={editData.payment_code ?? ''} onChange={(e) => setEditData({ ...editData, payment_code: e.target.value })} className={inputStyle} placeholder="رمز الدفع شام كاش" />
-              <input type="text" value={editData.payment_id ?? ''} onChange={(e) => setEditData({ ...editData, payment_id: e.target.value })} className={inputStyle} placeholder="معرّف الدفع USDT" />
-              <input type="text" value={editData.image_url ?? ''} onChange={(e) => setEditData({ ...editData, image_url: e.target.value })} className={inputStyle} placeholder="رابط الصورة" />
-              <textarea value={editData.description ?? ''} onChange={(e) => setEditData({ ...editData, description: e.target.value })} className={inputStyle + ' h-24 col-span-1 md:col-span-2'} placeholder="الوصف" />
+              <input type="text" value={String(editData.name ?? '')} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className={inputStyle} placeholder="الاسم" />
+              <input type="text" value={String(editData.phone ?? '')} onChange={(e) => setEditData({ ...editData, phone: e.target.value })} className={inputStyle} placeholder="رقم الهاتف" />
+              <input type="number" value={editData.salary ?? ''} onChange={(e) => setEditData({ ...editData, salary: e.target.value === '' ? null : parseInt(e.target.value, 10) })} className={inputStyle} placeholder="الراتب" />
+              <input type="text" value={String(editData.profession ?? '')} onChange={(e) => setEditData({ ...editData, profession: e.target.value })} className={inputStyle} placeholder="المهنة" />
+              <input type="text" value={String(editData.hours ?? '')} onChange={(e) => setEditData({ ...editData, hours: e.target.value })} className={inputStyle} placeholder="عدد ساعات العمل" />
+              <input type="text" value={String(editData.country ?? '')} onChange={(e) => setEditData({ ...editData, country: e.target.value })} className={inputStyle} placeholder="الدولة" />
+              <input type="text" value={String(editData.province ?? '')} onChange={(e) => setEditData({ ...editData, province: e.target.value })} className={inputStyle} placeholder="المحافظة" />
+              <input type="text" value={String(editData.city ?? '')} onChange={(e) => setEditData({ ...editData, city: e.target.value })} className={inputStyle} placeholder="المدينة" />
+              <input type="text" value={String(editData.job_location ?? '')} onChange={(e) => setEditData({ ...editData, job_location: e.target.value })} className={inputStyle} placeholder="مكان السكن" />
+              <input type="text" value={String(editData.location ?? '')} onChange={(e) => setEditData({ ...editData, location: e.target.value })} className={inputStyle} placeholder="الموقع (lat,lng)" />
+              <input type="text" value={String(editData.payment_code ?? '')} onChange={(e) => setEditData({ ...editData, payment_code: e.target.value })} className={inputStyle} placeholder="رمز الدفع شام كاش" />
+              <input type="text" value={String(editData.payment_id ?? '')} onChange={(e) => setEditData({ ...editData, payment_id: e.target.value })} className={inputStyle} placeholder="معرّف الدفع USDT" />
+              <input type="text" value={String(editData.image_url ?? '')} onChange={(e) => setEditData({ ...editData, image_url: e.target.value })} className={inputStyle} placeholder="رابط الصورة" />
+              <textarea value={String(editData.description ?? '')} onChange={(e) => setEditData({ ...editData, description: e.target.value })} className={inputStyle + ' h-24 col-span-1 md:col-span-2'} placeholder="الوصف" />
               <label className="flex items-center gap-2 text-sm col-span-1 md:col-span-2">
                 <input type="checkbox" checked={!!editData.approved} onChange={(e) => setEditData({ ...editData, approved: e.target.checked })} />
                 تمت الموافقة
@@ -435,9 +471,9 @@ export default function AdminHirePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                {safeImage(selected.image_url ?? selected.image ?? selected.photo) ? (
+                {safeImage(selected.image_url ?? (selected.image as string | undefined) ?? (selected.photo as string | undefined)) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={safeImage(selected.image_url ?? selected.image ?? selected.photo) as string} alt={selected.name || 'image'} className="w-full h-64 object-cover rounded border border-white/10 mb-3" />
+                  <img src={safeImage(selected.image_url ?? (selected.image as string | undefined) ?? (selected.photo as string | undefined)) as string} alt={selected.name || 'image'} className="w-full h-64 object-cover rounded border border-white/10 mb-3" />
                 ) : (
                   <div className="w-full h-64 bg-gray-800 rounded border border-white/10 mb-3 flex items-center justify-center text-gray-500">لا توجد صورة</div>
                 )}
@@ -461,47 +497,42 @@ export default function AdminHirePage() {
                   <div className="mt-2 p-3 bg-gray-800 rounded text-sm text-gray-200">{selected.description ?? '—'}</div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 text-sm text-gray-300">
-                  <p><strong>الموقع (raw):</strong> <span className="text-white/90 ml-2">{selected.location ?? '—'}</span></p>
-                  <p><strong>رمز الدفع شام كاش:</strong> <span className="text-white/90 ml-2">{selected.payment_code ?? '—'}</span></p>
-                  <p><strong>معرّف الدفع USDT:</strong> <span className="text-white/90 ml-2">{selected.payment_id ?? selected.transaction_id ?? '—'}</span></p>
-                  <p><strong>الحالة:</strong> <span className="text-white/90 ml-2">{selected.approved === true ? '✅ مقبول' : selected.approved === false ? '❌ مرفوض' : '⏳ بانتظار'}</span></p>
-                  <p><strong>تاريخ الإرسال:</strong> <span className="text-white/90 ml-2">{selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</span></p>
+                <div className="mb-3">
+                  <p className="text-sm text-gray-400"><strong>الموقع على الخريطة:</strong></p>
+                  <div className="mt-2">
+                    {parseLocation(selected.location) ? (
+                      <div className="w-full h-64 rounded overflow-hidden border border-white/6">
+                        <MapContainer
+                          center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
+                          zoom={13}
+                          style={{ height: '100%', width: '100%' }}
+                          scrollWheelZoom={false}
+                        >
+                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          <Marker position={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}>
+                            <Popup>
+                              {selected.name ?? ''} <br /> {selected.location ?? ''}
+                            </Popup>
+                          </Marker>
+                        </MapContainer>
+                      </div>
+                    ) : (
+                      <div className="p-4 bg-gray-800 rounded text-sm text-gray-400">لا توجد إحداثيات صحيحة للعرض</div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-4">
-                  {parseLocation(selected.location) ? (
-                    <div className="h-48 rounded overflow-hidden border border-white/10">
-                      <MapContainer
-                        center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
-                        zoom={13}
-                        style={{ height: '100%', width: '100%' }}
-                        scrollWheelZoom={false}
-                      >
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                        <Marker position={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}>
-                          <Popup>
-                            {selected.name} <br /> {selected.location}
-                          </Popup>
-                        </Marker>
-                      </MapContainer>
-                    </div>
-                  ) : (
-                    <div className="h-48 rounded bg-gray-800 flex items-center justify-center text-gray-500 border border-white/10">لا توجد إحداثيات صحيحة للعرض</div>
-                  )}
-                </div>
-
-                <div className="mt-4 flex gap-2">
-                  <button onClick={() => { handleAction(selected.id, 'approve'); setSelected(null); }} className="flex-1 bg-green-600 text-white px-3 py-2 rounded">قبول</button>
-                  <button onClick={() => { handleAction(selected.id, 'reject'); setSelected(null); }} className="flex-1 bg-yellow-500 text-white px-3 py-2 rounded">رفض</button>
-                  <button onClick={() => { handleEdit(selected); setSelected(null); }} className="flex-1 bg-blue-600 text-white px-3 py-2 rounded">تعديل</button>
-                  <button onClick={() => { handleAction(selected.id, 'delete'); setSelected(null); }} className="flex-1 bg-red-600 text-white px-3 py-2 rounded">حذف</button>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => handleAction(selected.id, 'approve')} className="px-3 py-2 bg-green-600 rounded text-white">قبول</button>
+                  <button onClick={() => handleAction(selected.id, 'reject')} className="px-3 py-2 bg-yellow-500 rounded text-white">رفض</button>
+                  <button onClick={() => setEditId(selected.id)} className="px-3 py-2 bg-blue-600 rounded text-white">تعديل</button>
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
+
     </main>
   );
 }
