@@ -1,6 +1,5 @@
 // app/api/admin/earnings/route.ts
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,14 +13,23 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { au
 
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin.from('earnings_ladder').select('*').order('level', { ascending: true });
+    const { data, error } = await supabaseAdmin
+      .from('earnings_ladder')
+      .select('*')
+      .order('level', { ascending: true });
+
     if (error) {
       console.error('earnings fetch error', error);
-      return NextResponse.json({ error: 'db_error', message: String(error.message || error) }, { status: 500 });
+      return NextResponse.json(
+        { error: 'db_error', message: String((error as Error)?.message ?? error) },
+        { status: 500 }
+      );
     }
-    return NextResponse.json({ rows: data || [] }, { status: 200 });
-  } catch (err: any) {
+
+    return NextResponse.json({ rows: data ?? [] }, { status: 200 });
+  } catch (err: unknown) {
     console.error('earnings route error', err);
-    return NextResponse.json({ error: 'server_error', message: String(err?.message || err) }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: 'server_error', message }, { status: 500 });
   }
 }
