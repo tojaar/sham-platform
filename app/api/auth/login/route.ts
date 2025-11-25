@@ -13,9 +13,21 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Server misconfiguration');
 }
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+});
 
-function buildCookie(name: string, value: string, opts: { path?: string; httpOnly?: boolean; secure?: boolean; sameSite?: string; maxAge?: number } = {}) {
+function buildCookie(
+  name: string,
+  value: string,
+  opts: {
+    path?: string;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: string;
+    maxAge?: number;
+  } = {}
+) {
   const parts = [`${name}=${value}`];
   parts.push(`Path=${opts.path ?? '/'}`);
   if (opts.httpOnly) parts.push('HttpOnly');
@@ -24,6 +36,15 @@ function buildCookie(name: string, value: string, opts: { path?: string; httpOnl
   if (typeof opts.maxAge === 'number') parts.push(`Max-Age=${opts.maxAge}`);
   return parts.join('; ');
 }
+
+// تعريف نوع للعضو لتفادي استخدام any
+type Member = {
+  id: string;
+  full_name?: string | null;
+  email?: string | null;
+  status?: string | null;
+  password_hash?: string | null;
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,16 +55,18 @@ export async function POST(req: NextRequest) {
     const email = String(body.email ?? '').trim().toLowerCase();
     const password = String(body.password ?? '');
 
-    if (!email || !password) return NextResponse.json({ error: 'missing_credentials' }, { status: 400 });
+    if (!email || !password) {
+      return NextResponse.json({ error: 'missing_credentials' }, { status: 400 });
+    }
 
     // اقرأ السجل مباشرة في كل محاولة
-    let member: any = null;
+    let member: Member | null = null;
     try {
       const { data, error } = await supabaseAdmin
         .from('producer_members')
         .select('id, full_name, email, status, password_hash')
         .eq('email', email)
-        .single();
+        .single<Member>();
       if (error) {
         console.warn('[login] supabase single error:', error);
       }
@@ -60,35 +83,61 @@ export async function POST(req: NextRequest) {
           .select('id, full_name, email, status, password_hash')
           .ilike('email', email)
           .limit(1);
-        if (Array.isArray(data) && data.length) member = data[0];
+        if (Array.isArray(data) && data.length) {
+          member = data[0] as Member;
+        }
       } catch (e) {
         console.error('[login] fallback lookup error', e);
       }
     }
 
-    if (!member) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    if (!member) {
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
 
     const status = (member.status ?? '').toString().trim().toLowerCase();
     if (status !== 'approved') {
-      return NextResponse.json({ error: 'not_approved', message: 'حسابك قيد المراجعة أو لم يتم قبوله بعد' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'not_approved', message: 'حسابك قيد المراجعة أو لم يتم قبوله بعد' },
+        { status: 403 }
+      );
     }
 
-    if (!member.password_hash) return NextResponse.json({ error: 'no_password' }, { status: 400 });
+    if (!member.password_hash) {
+      return NextResponse.json({ error: 'no_password' }, { status: 400 });
+    }
 
     const match = await bcrypt.compare(password, member.password_hash).catch((e) => {
       console.error('[login] bcrypt error', e);
       return false;
     });
 
-    if (!match) return NextResponse.json({ error: 'invalid_credentials' }, { status: 401 });
+    if (!match) {
+      return NextResponse.json({ error: 'invalid_credentials' }, { status: 401 });
+    }
 
     // تسجيل ناجح — ضع كوكي يحتوي id المستخدم (بسيط)
-    const res = NextResponse.json({ ok: true, user: { id: member.id, full_name: member.full_name, email: member.email } }, { status: 200 });
+    const res = NextResponse.json(
+      {
+        ok: true,
+        user: { id: member.id, full_name: member.full_name, email: member.email },
+      },
+      { status: 200 }
+    );
     // أثناء التطوير لا تضع secure=true على localhost
-    res.headers.set('Set-Cookie', buildCookie(COOKIE_NAME, String(member.id), { path: '/', httpOnly: true, sameSite: 'Lax', maxAge: 7 * 24 * 3600 }));
+    res.headers.set(
+      'Set-Cookie',
+      buildCookie(COOKIE_NAME, String(member.id), {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'Lax',
+        maxAge: 7 * 24 * 3600,
+      })
+    );
     return res;
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[login] unexpected', err);
-    return NextResponse.json({ error: 'server_error', message: String(err?.message ?? err) }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: 'server_error', message }, { status: 500 });
   }
 }
