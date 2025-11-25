@@ -4,8 +4,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// قمنا بتحميل react-leaflet و leaflet ديناميكيًا داخل useEffect لتجنب أخطاء SSR.
-
 type CommPayload = {
   category: string;
   name: string;
@@ -31,13 +29,12 @@ type CommPayload = {
 type LatLng = { lat: number; lng: number };
 
 type LeafletAPI = {
-  MapContainer?: React.ComponentType<any>;
-  TileLayer?: React.ComponentType<any>;
-  Marker?: React.ComponentType<any>;
+  MapContainer?: React.JSXElementConstructor<any>;
+  TileLayer?: React.JSXElementConstructor<any>;
+  Marker?: React.JSXElementConstructor<any>;
   useMapEvents?: (handlers: { click: (e: { latlng: LatLng }) => void }) => void;
 };
 
-// helper: File -> base64
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -50,28 +47,21 @@ const fileToBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-// upload to imgbb
 const uploadToImgbb = async (file: File | null): Promise<string | null> => {
   if (!file) return null;
   const key = process.env.NEXT_PUBLIC_IMGBB_KEY;
-  if (!key) throw new Error('مفتاح IMGBB غير موجود. عيّنه في NEXT_PUBLIC_IMGBB_KEY.');
+  if (!key) throw new Error('مفتاح IMGBB غير موجود.');
   const base64 = await fileToBase64(file);
   const form = new URLSearchParams();
   form.append('key', key);
   form.append('image', base64);
-  const res = await fetch('https://api.imgbb.com/1/upload', {
-    method: 'POST',
-    body: form,
-  });
+  const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: form });
   const json = await res.json();
-  if (!res.ok || !json || !json.data || !json.data.url) {
-    throw new Error(json?.error?.message ?? 'فشل رفع الصورة إلى imgbb');
-  }
+  if (!res.ok || !json?.data?.url) throw new Error(json?.error?.message ?? 'فشل رفع الصورة');
   return json.data.url as string;
 };
 
 export default function PostAdPage() {
-  // form state
   const [category, setCategory] = useState('cars');
   const [isCompany, setIsCompany] = useState(false);
   const [companyName, setCompanyName] = useState('');
@@ -91,13 +81,11 @@ export default function PostAdPage() {
   const [paymentCode, setPaymentCode] = useState('');
   const [paymentId, setPaymentId] = useState('');
 
-  // UI state
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // dynamic leaflet/react-leaflet references
   const [leafletReady, setLeafletReady] = useState(false);
   const leafletRef = useRef<LeafletAPI | null>(null);
   const mapRef = useRef<unknown>(null);
@@ -107,9 +95,7 @@ export default function PostAdPage() {
       const url = URL.createObjectURL(imageFile);
       setImagePreview(url);
       return () => URL.revokeObjectURL(url);
-    } else {
-      setImagePreview(null);
-    }
+    } else setImagePreview(null);
   }, [imageFile]);
 
   useEffect(() => {
@@ -117,18 +103,16 @@ export default function PostAdPage() {
       const url = URL.createObjectURL(logoFile);
       setLogoPreview(url);
       return () => URL.revokeObjectURL(url);
-    } else {
-      setLogoPreview(null);
-    }
+    } else setLogoPreview(null);
   }, [logoFile]);
 
-  // load leaflet + react-leaflet + css only in client
   useEffect(() => {
     let mounted = true;
     (async () => {
       if (typeof window === 'undefined') return;
+
       try {
-        // inject leaflet CSS once (avoid dynamic CSS import type issues)
+        // inject leaflet CSS once (safe for SSR)
         if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
           const link = document.createElement('link');
           link.rel = 'stylesheet';
@@ -147,22 +131,17 @@ export default function PostAdPage() {
 
         const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
 
-        // fix icon paths after leaflet loaded
+        // Use an intermediate unknown/any cast to avoid incompatible type conversion errors
+        const leafletAny = leafletModule as unknown as any;
         try {
-          const L = leafletModule as unknown as {
-            Icon?: {
-              Default?: {
-                prototype?: Record<string, unknown>;
-                mergeOptions?: (opts: Record<string, string>) => void;
-              };
-            };
-          };
-          if (L && L.Icon && L.Icon.Default) {
-            try {
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-              delete (L.Icon.Default.prototype as Record<string, unknown>)._getIconUrl;
-            } catch {}
-            L.Icon.Default.mergeOptions?.({
+          if (leafletAny?.Icon?.Default) {
+            const proto = leafletAny.Icon.Default.prototype as Record<string, unknown> | undefined;
+            if (proto && '_getIconUrl' in proto) {
+              // safe dynamic delete
+              // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+              delete proto._getIconUrl;
+            }
+            leafletAny.Icon.Default.mergeOptions?.({
               iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
               iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
               shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
@@ -172,10 +151,11 @@ export default function PostAdPage() {
           console.warn('leaflet icon fix failed', err);
         }
 
+        // store runtime components as JSX constructors
         leafletRef.current = {
-          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.ComponentType<any>,
-          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.ComponentType<any>,
-          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.ComponentType<any>,
+          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<any>,
+          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<any>,
+          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<any>,
           useMapEvents: (reactLeafletModule as Record<string, unknown>).useMapEvents as (handlers: { click: (e: { latlng: LatLng }) => void }) => void,
         };
 
@@ -189,7 +169,6 @@ export default function PostAdPage() {
     };
   }, []);
 
-  // Location picker component (client-only usage via dynamic loaded useMapEvents)
   const LocationPicker = ({ onSet }: { onSet: (c: LatLng) => void }) => {
     const u = leafletRef.current?.useMapEvents;
     if (!u) return null;
@@ -233,11 +212,8 @@ export default function PostAdPage() {
     setMessage('⏳ جاري رفع الصور وحفظ الإعلان...');
 
     try {
-      let imageUrl: string | null = null;
-      let logoUrl: string | null = null;
-
-      if (imageFile) imageUrl = await uploadToImgbb(imageFile);
-      if (logoFile) logoUrl = await uploadToImgbb(logoFile);
+      const imageUrl = imageFile ? await uploadToImgbb(imageFile) : null;
+      const logoUrl = logoFile ? await uploadToImgbb(logoFile) : null;
 
       const { data: userData } = await supabase.auth.getUser();
       const user = userData?.user;
@@ -250,7 +226,7 @@ export default function PostAdPage() {
       const payload: CommPayload = {
         category,
         name: isCompany ? companyName.trim() : personName.trim(),
-        phone: phone ? phone.trim() : null,
+        phone: phone || null,
         is_company: isCompany,
         company_logo: logoUrl ?? null,
         image_url: imageUrl ?? null,
@@ -407,9 +383,9 @@ export default function PostAdPage() {
                 </div>
               ) : (
                 (() => {
-                  const MapContainerComp = leafletRef.current?.MapContainer as React.ComponentType<any> | undefined;
-                  const TileLayerComp = leafletRef.current?.TileLayer as React.ComponentType<any> | undefined;
-                  const MarkerComp = leafletRef.current?.Marker as React.ComponentType<any> | undefined;
+                  const MapContainerComp = leafletRef.current?.MapContainer;
+                  const TileLayerComp = leafletRef.current?.TileLayer;
+                  const MarkerComp = leafletRef.current?.Marker;
 
                   if (!MapContainerComp || !TileLayerComp || !MarkerComp) {
                     return (
@@ -419,6 +395,7 @@ export default function PostAdPage() {
                     );
                   }
 
+                  // Render runtime-loaded components using JSX constructors
                   return (
                     <MapContainerComp
                       whenCreated={(m: unknown) => {
