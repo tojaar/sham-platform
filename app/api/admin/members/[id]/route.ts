@@ -14,10 +14,17 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 // استخراج الـ id من المسار /api/admin/members/{id}
-function extractId(pathname: string) {
+function extractId(pathname: string): string | undefined {
   const parts = pathname.split('/').filter(Boolean);
   return parts[parts.length - 1];
 }
+
+// تعريف نوع العضو لتفادي استخدام any
+type Member = {
+  id: string;
+  invite_code_self?: string | number | null;
+  [key: string]: unknown;
+};
 
 // GET: تفاصيل العضو + المدعوين مستوى أول وثاني
 export async function GET(req: NextRequest) {
@@ -30,11 +37,14 @@ export async function GET(req: NextRequest) {
       .from('producer_members')
       .select('*')
       .eq('id', id)
-      .single();
+      .single<Member>();
 
     if (memErr) {
       console.error('member fetch error', memErr);
-      return NextResponse.json({ error: 'db_error', message: String(memErr.message || memErr) }, { status: 500 });
+      return NextResponse.json(
+        { error: 'db_error', message: String((memErr as Error).message ?? memErr) },
+        { status: 500 }
+      );
     }
     if (!memberData) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
@@ -47,12 +57,15 @@ export async function GET(req: NextRequest) {
 
     if (l1Err) {
       console.error('level1 fetch error', l1Err);
-      return NextResponse.json({ error: 'db_error', message: String(l1Err.message || l1Err) }, { status: 500 });
+      return NextResponse.json(
+        { error: 'db_error', message: String((l1Err as Error).message ?? l1Err) },
+        { status: 500 }
+      );
     }
 
     // المستوى الثاني: من استخدم invite_code لأي invite_code_self من المستوى الأول
-    const l1Codes = (level1 || []).map((r: any) => r.invite_code_self).filter(Boolean);
-    let level2: any[] = [];
+    const l1Codes = (level1 ?? []).map((r: Member) => r.invite_code_self).filter(Boolean) as (string | number)[];
+    let level2: Member[] = [];
     if (l1Codes.length > 0) {
       const { data: l2, error: l2Err } = await supabaseAdmin
         .from('producer_members')
@@ -61,18 +74,25 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: false });
       if (l2Err) {
         console.error('level2 fetch error', l2Err);
-        return NextResponse.json({ error: 'db_error', message: String(l2Err.message || l2Err) }, { status: 500 });
+        return NextResponse.json(
+          { error: 'db_error', message: String((l2Err as Error).message ?? l2Err) },
+          { status: 500 }
+        );
       }
-      level2 = l2 || [];
+      level2 = (l2 ?? []) as Member[];
     }
 
-    return NextResponse.json({
-      member: memberData,
-      referrals: { level1: level1 || [], level2 }
-    }, { status: 200 });
-  } catch (err: any) {
+    return NextResponse.json(
+      {
+        member: memberData,
+        referrals: { level1: level1 ?? [], level2 },
+      },
+      { status: 200 }
+    );
+  } catch (err: unknown) {
     console.error('GET member detail error', err);
-    return NextResponse.json({ error: 'server_error', message: String(err?.message || err) }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: 'server_error', message }, { status: 500 });
   }
 }
 
@@ -83,7 +103,7 @@ export async function POST(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
 
     const body = await req.json().catch(() => null);
-    const action = body?.action;
+    const action: string | undefined = body?.action;
     if (!action) return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
 
     let statusValue = action;
@@ -96,16 +116,20 @@ export async function POST(req: NextRequest) {
       .update({ status: statusValue })
       .eq('id', id)
       .select()
-      .single();
+      .single<Member>();
 
     if (error) {
       console.error('update member error', error);
-      return NextResponse.json({ error: 'db_error', message: String(error.message || error) }, { status: 500 });
+      return NextResponse.json(
+        { error: 'db_error', message: String((error as Error).message ?? error) },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true, member: data }, { status: 200 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('POST member update error', err);
-    return NextResponse.json({ error: 'server_error', message: String(err?.message || err) }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: 'server_error', message }, { status: 500 });
   }
 }
