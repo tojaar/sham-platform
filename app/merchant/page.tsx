@@ -1,12 +1,10 @@
-// app/Merchant/page.tsx
+// app/merchant/page.tsx
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-// قمنا بإزالة الاستيرادات المباشرة لِـ react-leaflet و leaflet و CSS هنا
-// لأنها تسبّب خطأ window is not defined أثناء SSR.
+// قمنا بتحميل react-leaflet و leaflet ديناميكيًا داخل useEffect لتجنب أخطاء SSR.
 
 type CommPayload = {
   category: string;
@@ -27,7 +25,16 @@ type CommPayload = {
   payment_id?: string | null;
   approved?: boolean;
   created_by?: string | null;
-  [key: string]: any;
+  [key: string]: unknown;
+};
+
+type LatLng = { lat: number; lng: number };
+
+type LeafletAPI = {
+  MapContainer?: React.ComponentType<any>;
+  TileLayer?: React.ComponentType<any>;
+  Marker?: React.ComponentType<any>;
+  useMapEvents?: (handlers: { click: (e: { latlng: LatLng }) => void }) => void;
 };
 
 // helper: File -> base64
@@ -58,37 +65,12 @@ const uploadToImgbb = async (file: File | null): Promise<string | null> => {
   });
   const json = await res.json();
   if (!res.ok || !json || !json.data || !json.data.url) {
-    throw new Error(json.error?.message ?? 'فشل رفع الصورة إلى imgbb');
+    throw new Error(json?.error?.message ?? 'فشل رفع الصورة إلى imgbb');
   }
-  return json.data.url;
-};
-
-// parse coords text like "lat,lng" or JSON-ish
-const parseLocationString = (loc?: string | null) => {
-  if (!loc) return null;
-  try {
-    const s = String(loc).trim();
-    const parts = s.includes(',') ? s.split(',') : s.split(/\s+/);
-    if (parts.length >= 2) {
-      const lat = Number(parts[0]);
-      const lng = Number(parts[1]);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-    }
-    if (s.startsWith('{')) {
-      const parsed = JSON.parse(s.replace(/(\w+)\s*:/g, '"$1":'));
-      const lat = Number(parsed.lat ?? parsed.latitude ?? parsed.latitiude);
-      const lng = Number(parsed.lng ?? parsed.longitude ?? parsed.long);
-      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return json.data.url as string;
 };
 
 export default function PostAdPage() {
- 
-
   // form state
   const [category, setCategory] = useState('cars');
   const [isCompany, setIsCompany] = useState(false);
@@ -102,7 +84,7 @@ export default function PostAdPage() {
   const [province, setProvince] = useState('');
   const [city, setCity] = useState('');
   const [address, setAddress] = useState('');
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [coords, setCoords] = useState<LatLng | null>(null);
 
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
@@ -117,13 +99,8 @@ export default function PostAdPage() {
 
   // dynamic leaflet/react-leaflet references
   const [leafletReady, setLeafletReady] = useState(false);
-  const leafletRef = useRef<{
-    MapContainer?: any;
-    TileLayer?: any;
-    Marker?: any;
-    useMapEvents?: any;
-  } | null>(null);
-  const mapRef = useRef<any>(null);
+  const leafletRef = useRef<LeafletAPI | null>(null);
+  const mapRef = useRef<unknown>(null);
 
   useEffect(() => {
     if (imageFile) {
@@ -155,7 +132,7 @@ export default function PostAdPage() {
         if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
           const link = document.createElement('link');
           link.rel = 'stylesheet';
-          link.dataset.leafletCss = '1';
+          (link as HTMLLinkElement).dataset.leafletCss = '1';
           try {
             link.href = new URL('leaflet/dist/leaflet.css', import.meta.url).toString();
           } catch {
@@ -168,17 +145,24 @@ export default function PostAdPage() {
           });
         }
 
-        const [leafletModule, reactLeafletModule] = await Promise.all([
-          import('leaflet'),
-          import('react-leaflet'),
-        ]);
+        const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
 
         // fix icon paths after leaflet loaded
         try {
-          const L = leafletModule as any;
+          const L = leafletModule as unknown as {
+            Icon?: {
+              Default?: {
+                prototype?: Record<string, unknown>;
+                mergeOptions?: (opts: Record<string, string>) => void;
+              };
+            };
+          };
           if (L && L.Icon && L.Icon.Default) {
-            try { delete L.Icon.Default.prototype._getIconUrl; } catch {}
-            L.Icon.Default.mergeOptions({
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+              delete (L.Icon.Default.prototype as Record<string, unknown>)._getIconUrl;
+            } catch {}
+            L.Icon.Default.mergeOptions?.({
               iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
               iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
               shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
@@ -189,10 +173,10 @@ export default function PostAdPage() {
         }
 
         leafletRef.current = {
-          MapContainer: reactLeafletModule.MapContainer,
-          TileLayer: reactLeafletModule.TileLayer,
-          Marker: reactLeafletModule.Marker,
-          useMapEvents: reactLeafletModule.useMapEvents,
+          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.ComponentType<any>,
+          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.ComponentType<any>,
+          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.ComponentType<any>,
+          useMapEvents: (reactLeafletModule as Record<string, unknown>).useMapEvents as (handlers: { click: (e: { latlng: LatLng }) => void }) => void,
         };
 
         if (mounted) setLeafletReady(true);
@@ -200,15 +184,17 @@ export default function PostAdPage() {
         console.error('failed loading leaflet/react-leaflet', err);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // Location picker component (client-only usage via dynamic loaded useMapEvents)
-  const LocationPicker = ({ onSet }: { onSet: (c: { lat: number; lng: number }) => void }) => {
+  const LocationPicker = ({ onSet }: { onSet: (c: LatLng) => void }) => {
     const u = leafletRef.current?.useMapEvents;
     if (!u) return null;
     u({
-      click(e: any) {
+      click(e: { latlng: LatLng }) {
         onSet({ lat: e.latlng.lat, lng: e.latlng.lng });
       },
     });
@@ -264,7 +250,7 @@ export default function PostAdPage() {
       const payload: CommPayload = {
         category,
         name: isCompany ? companyName.trim() : personName.trim(),
-        phone: phone || null,
+        phone: phone ? phone.trim() : null,
         is_company: isCompany,
         company_logo: logoUrl ?? null,
         image_url: imageUrl ?? null,
@@ -286,10 +272,10 @@ export default function PostAdPage() {
       if (error) throw error;
 
       setMessage('✅ تم حفظ الإعلان بنجاح. بانتظار الموافقة.');
-      
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setMessage('❌ حدث خطأ أثناء الحفظ: ' + (err?.message ?? String(err)));
+      const msg = (err as { message?: string })?.message ?? String(err);
+      setMessage('❌ حدث خطأ أثناء الحفظ: ' + msg);
     } finally {
       setLoading(false);
     }
@@ -343,7 +329,13 @@ export default function PostAdPage() {
       cursor: 'pointer',
       fontSize: 15,
     } as React.CSSProperties,
-    mapWrap: { width: '100%', height: 300, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.04)' } as React.CSSProperties,
+    mapWrap: {
+      width: '100%',
+      height: 300,
+      borderRadius: 10,
+      overflow: 'hidden',
+      border: '1px solid rgba(255,255,255,0.04)',
+    } as React.CSSProperties,
   };
 
   return (
@@ -391,6 +383,7 @@ export default function PostAdPage() {
             </div>
 
             <div style={styles.previewBox}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               {logoPreview ? <img src={logoPreview} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة شعار</div>}
             </div>
           </div>
@@ -408,25 +401,42 @@ export default function PostAdPage() {
               {coords ? <div style={{ fontSize: 13, color: '#bfeffd' }}>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</div> : null}
             </div>
             <div style={styles.mapWrap}>
-              {/* إذا لم تُحمّل مكتبات الخريطة بعد، نعرض رسالة أو بديل بسيط */}
               {!leafletReady || !leafletRef.current ? (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bcdfe7', padding: 12 }}>
                   تحميل مكوّن الخريطة...
                 </div>
               ) : (
                 (() => {
-                  const { MapContainer, TileLayer, Marker } = leafletRef.current as any;
+                  const MapContainerComp = leafletRef.current?.MapContainer as React.ComponentType<any> | undefined;
+                  const TileLayerComp = leafletRef.current?.TileLayer as React.ComponentType<any> | undefined;
+                  const MarkerComp = leafletRef.current?.Marker as React.ComponentType<any> | undefined;
+
+                  if (!MapContainerComp || !TileLayerComp || !MarkerComp) {
+                    return (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bcdfe7', padding: 12 }}>
+                        تحميل مكوّن الخريطة...
+                      </div>
+                    );
+                  }
+
                   return (
-                    <MapContainer
-                      whenCreated={(m: any) => { mapRef.current = m; setTimeout(() => { try { (m as any).invalidateSize(); } catch {} }, 120); }}
+                    <MapContainerComp
+                      whenCreated={(m: unknown) => {
+                        mapRef.current = m;
+                        setTimeout(() => {
+                          try {
+                            (m as { invalidateSize?: () => void }).invalidateSize?.();
+                          } catch {}
+                        }, 120);
+                      }}
                       center={[33.3128, 44.3615]}
                       zoom={6}
                       style={{ width: '100%', height: '100%' }}
                     >
-                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                      <TileLayerComp url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                       <LocationPicker onSet={(c) => setCoords(c)} />
-                      {coords && <Marker position={[coords.lat, coords.lng]} />}
-                    </MapContainer>
+                      {coords && <MarkerComp position={[coords.lat, coords.lng]} />}
+                    </MapContainerComp>
                   );
                 })()
               )}
@@ -447,6 +457,7 @@ export default function PostAdPage() {
             </div>
 
             <div style={styles.previewBox}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               {imagePreview ? <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة الصورة</div>}
             </div>
           </div>
@@ -461,7 +472,6 @@ export default function PostAdPage() {
               <button onClick={handleSubmit} disabled={loading} style={{ ...styles.btnPrimary, opacity: loading ? 0.7 : 1 }}>
                 {loading ? 'جارٍ الحفظ...' : 'حفظ الإعلان'}
               </button>
-
               <button
                 onClick={() => {
                   setCategory('cars');
