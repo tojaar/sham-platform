@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import type { PostgrestError } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
@@ -85,7 +86,8 @@ async function insertProducerMemberWithRetries(
 
     console.error('producer_members insert failed attempt', attempts + 1, { payload, error });
 
-    const msg = String((error as Error)?.message || (error as any)?.details || error);
+    const pgErr = error as PostgrestError | null;
+    const msg = String(pgErr?.message ?? pgErr?.details ?? error);
     if (/unique|duplicate|23505/i.test(msg)) {
       attempts++;
       continue;
