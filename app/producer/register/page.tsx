@@ -141,8 +141,9 @@ export default function ProducerRegisterPage() {
           inviteCode: '',
         });
       }
-    } catch (err: any) {
-      setError(err?.message ?? String(err) ?? 'خطأ غير متوقع');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
+      setError(msg || 'خطأ غير متوقع');
     } finally {
       setLoading(false);
     }
