@@ -29,9 +29,9 @@ type CommPayload = {
 type LatLng = { lat: number; lng: number };
 
 type LeafletAPI = {
-  MapContainer?: React.JSXElementConstructor<any>;
-  TileLayer?: React.JSXElementConstructor<any>;
-  Marker?: React.JSXElementConstructor<any>;
+  MapContainer?: React.JSXElementConstructor<unknown>;
+  TileLayer?: React.JSXElementConstructor<unknown>;
+  Marker?: React.JSXElementConstructor<unknown>;
   useMapEvents?: (handlers: { click: (e: { latlng: LatLng }) => void }) => void;
 };
 
@@ -131,31 +131,36 @@ export default function PostAdPage() {
 
         const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
 
-        // Use an intermediate unknown/any cast to avoid incompatible type conversion errors
-        const leafletAny = leafletModule as unknown as any;
+        // Access Icon.Default safely via unknown + Reflect to avoid incompatible cast errors
+        const leafletUnknown: unknown = leafletModule;
         try {
-          if (leafletAny?.Icon?.Default) {
-            const proto = leafletAny.Icon.Default.prototype as Record<string, unknown> | undefined;
-            if (proto && '_getIconUrl' in proto) {
-              // safe dynamic delete
-              // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-              delete proto._getIconUrl;
+          if (leafletUnknown && typeof leafletUnknown === 'object') {
+            const Icon = Reflect.get(leafletUnknown as object, 'Icon') as unknown;
+            if (Icon && typeof Icon === 'object') {
+              const Default = Reflect.get(Icon as object, 'Default') as unknown;
+              if (Default && typeof Default === 'object') {
+                const proto = Reflect.get(Default as object, 'prototype') as Record<string, unknown> | undefined;
+                if (proto && '_getIconUrl' in proto) {
+                  Reflect.deleteProperty(proto, '_getIconUrl');
+                }
+                const mergeOptions = Reflect.get(Default as object, 'mergeOptions') as ((opts: Record<string, string>) => void) | undefined;
+                mergeOptions?.({
+                  iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+                  iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+                  shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+                });
+              }
             }
-            leafletAny.Icon.Default.mergeOptions?.({
-              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-            });
           }
         } catch (err) {
           console.warn('leaflet icon fix failed', err);
         }
 
-        // store runtime components as JSX constructors
+        // store runtime components as JSX constructors (unknown props allowed)
         leafletRef.current = {
-          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<any>,
-          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<any>,
-          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<any>,
+          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<unknown>,
+          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<unknown>,
+          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<unknown>,
           useMapEvents: (reactLeafletModule as Record<string, unknown>).useMapEvents as (handlers: { click: (e: { latlng: LatLng }) => void }) => void,
         };
 
@@ -395,25 +400,25 @@ export default function PostAdPage() {
                     );
                   }
 
-                  // Render runtime-loaded components using JSX constructors
-                  return (
-                    <MapContainerComp
-                      whenCreated={(m: unknown) => {
+                  // Use React.createElement to avoid JSX typing issues with runtime-loaded constructors
+                  return React.createElement(
+                    MapContainerComp as React.JSXElementConstructor<any>,
+                    {
+                      whenCreated: (m: unknown) => {
                         mapRef.current = m;
                         setTimeout(() => {
                           try {
                             (m as { invalidateSize?: () => void }).invalidateSize?.();
                           } catch {}
                         }, 120);
-                      }}
-                      center={[33.3128, 44.3615]}
-                      zoom={6}
-                      style={{ width: '100%', height: '100%' }}
-                    >
-                      <TileLayerComp url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                      <LocationPicker onSet={(c) => setCoords(c)} />
-                      {coords && <MarkerComp position={[coords.lat, coords.lng]} />}
-                    </MapContainerComp>
+                      },
+                      center: [33.3128, 44.3615],
+                      zoom: 6,
+                      style: { width: '100%', height: '100%' },
+                    },
+                    React.createElement(TileLayerComp as React.JSXElementConstructor<any>, { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }),
+                    React.createElement(LocationPicker, { onSet: (c: LatLng) => setCoords(c) }),
+                    coords ? React.createElement(MarkerComp as React.JSXElementConstructor<any>, { position: [coords.lat, coords.lng] }) : null
                   );
                 })()
               )}
