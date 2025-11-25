@@ -400,25 +400,31 @@ export default function PostAdPage() {
                     );
                   }
 
-                  // Use React.createElement to avoid JSX typing issues with runtime-loaded constructors
-                  return React.createElement(
-                    MapContainerComp as React.JSXElementConstructor<any>,
-                    {
-                      whenCreated: (m: unknown) => {
-                        mapRef.current = m;
-                        setTimeout(() => {
-                          try {
-                            (m as { invalidateSize?: () => void }).invalidateSize?.();
-                          } catch {}
-                        }, 120);
-                      },
-                      center: [33.3128, 44.3615],
-                      zoom: 6,
-                      style: { width: '100%', height: '100%' },
+                  // Use React.createElement with unknown-typed props to avoid any usage
+                  const mapProps: unknown = {
+                    whenCreated: (m: unknown) => {
+                      mapRef.current = m;
+                      setTimeout(() => {
+                        try {
+                          (m as { invalidateSize?: () => void }).invalidateSize?.();
+                        } catch {}
+                      }, 120);
                     },
-                    React.createElement(TileLayerComp as React.JSXElementConstructor<any>, { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' }),
-                    React.createElement(LocationPicker, { onSet: (c: LatLng) => setCoords(c) }),
-                    coords ? React.createElement(MarkerComp as React.JSXElementConstructor<any>, { position: [coords.lat, coords.lng] }) : null
+                    center: [33.3128, 44.3615],
+                    zoom: 6,
+                    style: { width: '100%', height: '100%' },
+                  };
+
+                  const tileProps: unknown = { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' };
+                  const locationPickerProps: unknown = { onSet: (c: LatLng) => setCoords(c) };
+                  const markerProps: unknown = coords ? { position: [coords.lat, coords.lng] } : undefined;
+
+                  return React.createElement(
+                    MapContainerComp as React.JSXElementConstructor<unknown>,
+                    mapProps,
+                    React.createElement(TileLayerComp as React.JSXElementConstructor<unknown>, tileProps),
+                    React.createElement(LocationPicker as React.JSXElementConstructor<unknown>, locationPickerProps),
+                    coords ? React.createElement(MarkerComp as React.JSXElementConstructor<unknown>, markerProps as unknown) : null
                   );
                 })()
               )}
