@@ -48,7 +48,6 @@ export default function SearchSeekerForm() {
   useEffect(() => {
     fetchSeekers();
     return () => { document.body.style.overflow = ''; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchSeekers() {
@@ -65,9 +64,8 @@ export default function SearchSeekerForm() {
       if (error) throw error;
       setSeekers(Array.isArray(data) ? (data as Seeker[]) : []);
     } catch (err: unknown) {
-      // سجل الخطأ واظهر رسالة مناسبة للمستخدم
-      // لا نغير السلوك الوظيفي للصفحة
-      // eslint-disable-next-line no-console
+      // سجل الخطأ واظهر رسالة مناسبة للمستخدم دون تغيير السلوك
+      // لا نستخدم eslint-disable هنا لأن التعليمة ليست مطلوبة
       console.error('fetchSeekers error', err);
       const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
       setMessage('تعذر جلب البيانات: ' + msg);
