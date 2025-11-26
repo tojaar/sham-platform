@@ -5,48 +5,61 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
 /**
- * نحمّل أيقونات react-icons ديناميكيًا مع تعطيل SSR لتجنّب مشاكل النوع أثناء البناء/SSR.
- * نصرّف النوع كـ React.ComponentType<React.SVGProps<SVGSVGElement>> لتوافق مع JSX SVG props.
+ * Dynamic icon loader that returns a React component typed as an SVG component.
+ * We wrap the named export from react-icons in a small functional component so
+ * Next's dynamic loader receives a proper component constructor.
+ *
+ * This avoids the TypeScript mismatch between the dynamic loader signature
+ * and the various export shapes from react-icons.
  */
-const FaUser = dynamic(
-  () => import('react-icons/fa').then((mod) => mod.FaUser),
-  { ssr: false }
-) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const loadFaUser = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaUser as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
 
-const FaStore = dynamic(
-  () => import('react-icons/fa').then((mod) => mod.FaStore),
-  { ssr: false }
-) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const loadFaStore = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaStore as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
 
-const FaTools = dynamic(
-  () => import('react-icons/fa').then((mod) => mod.FaTools),
-  { ssr: false }
-) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const loadFaTools = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaTools as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
 
-const FaBriefcase = dynamic(
-  () => import('react-icons/fa').then((mod) => mod.FaBriefcase),
-  { ssr: false }
-) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const loadFaBriefcase = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaBriefcase as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
+
+const FaUser = dynamic(loadFaUser, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const FaStore = dynamic(loadFaStore, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const FaTools = dynamic(loadFaTools, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const FaBriefcase = dynamic(loadFaBriefcase, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
 export default function HomePage() {
-  // رابط الخلفية — إن كان لديك صورة داخلية في المشروع استخدم مسار محلي بدلاً من URL خارجي
   const bgUrl =
-    'https://copilot.microsoft.com/th/id/BCO.0eb9ccce-1341-4fef-a97b-9b7e1d8ee3df.png';
+    '/bg.jpg'; // recommended: place a background image in public/bg.jpg for reliable loading
 
   return (
     <main
       className="min-h-screen bg-cover bg-center flex items-center justify-center p-6"
       style={{
-        // استخدم قالب سلسلة للتأكد من أن القيمة صحيحة
         backgroundImage: `url("${bgUrl}")`,
-        // لون احتياطي في حال لم تُحمّل الصورة
         backgroundColor: '#0f172a',
       }}
     >
       <div className="bg-white/80 backdrop-blur-md rounded-xl p-6 shadow-lg w-full max-w-lg">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">منصة تجار للإعلانات</h1>
 
-        {/* زر جديد لإنشاء صفحة */}
         <div className="flex justify-center mb-4">
           <Link
             href="/create-page"
