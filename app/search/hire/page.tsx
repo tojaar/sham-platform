@@ -62,7 +62,6 @@ export default function SearchHirePage() {
           if (L && L.Icon && L.Icon.Default && L.Icon.Default.prototype) {
             // حذف الخاصية بطريقة آمنة
             try {
-              // Reflect.deleteProperty يتجنب eslint no-dynamic-delete
               Reflect.deleteProperty(L.Icon.Default.prototype as object, '_getIconUrl');
             } catch {}
             L.Icon.Default.mergeOptions?.({
@@ -80,10 +79,6 @@ export default function SearchHirePage() {
   const normalize = (rawInput: unknown): Hire => {
     const raw = (rawInput && typeof rawInput === 'object') ? (rawInput as Record<string, unknown>) : {};
 
-    const getStr = (k: string) => {
-      const v = raw[k];
-      return typeof v === 'string' && v ? v : undefined;
-    };
     const getNum = (k: string) => {
       const v = raw[k];
       return typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : undefined);
