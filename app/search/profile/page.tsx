@@ -42,9 +42,6 @@ export default function ProfilePage() {
 
         setUser(extracted);
       } catch (err) {
-        // keep behavior simple: on error, set user to null and optionally log
-        // (no behavior change for UI)
-        // eslint-disable-next-line no-console
         console.error('Failed to get user from supabase', err);
         setUser(null);
       }
@@ -54,11 +51,17 @@ export default function ProfilePage() {
 
   if (!user) return <p>جاري تحميل البيانات...</p>;
 
+  // compute role safely without using any
+  const role =
+    user.user_metadata && typeof user.user_metadata === 'object' && 'role' in user.user_metadata && typeof (user.user_metadata as Record<string, unknown>).role === 'string'
+      ? ((user.user_metadata as Record<string, unknown>).role as string)
+      : 'غير محدد';
+
   return (
     <main style={{ padding: '2rem' }}>
       <h1>👤 معلومات المستخدم</h1>
       <p><strong>البريد الإلكتروني:</strong> {user.email ?? '—'}</p>
-      <p><strong>الدور:</strong> {user.user_metadata && typeof user.user_metadata === 'object' && 'role' in user.user_metadata ? (user.user_metadata as any).role ?? 'غير محدد' : 'غير محدد'}</p>
+      <p><strong>الدور:</strong> {role}</p>
       <p><strong>المعرف:</strong> {user.id ?? '—'}</p>
     </main>
   );
