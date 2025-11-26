@@ -2,9 +2,12 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
+/* NOTE:
+   لا نستورد react-leaflet أو leaflet هنا على مستوى الملف لأن ذلك يؤدي إلى استيراد leaflet أثناء SSR
+   ويسبب خطأ "window is not defined". نحمّل react-leaflet و useMapEvents و TileLayer و Marker داخل ClientMap فقط.
+*/
 import 'leaflet/dist/leaflet.css';
 
 type Ad = {
@@ -40,8 +43,7 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
-          const cell =
-            typeof v === 'string' ? v.replace(/"/g, '""') : String(v ?? '');
+          const cell = typeof v === 'string' ? v.replace(/"/g, '""') : String(v ?? '');
           return "${cell}";
         })
         .join(',')
@@ -49,16 +51,6 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
     .join('\n');
   return `${header}\n${body};`
 };
-
-// MapClick component to capture clicks and set coordinates
-function MapClick({ setCoords }: { setCoords: (c: { lat: number; lng: number }) => void }) {
-  useMapEvents({
-    click(e: LeafletMouseEvent) {
-      setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
-    },
-  });
-  return null;
-}
 
 export default function AdminPostForm() {
   const [posts, setPosts] = useState<Ad[]>([]);
@@ -82,20 +74,16 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // handleMapCreated: typed callback for whenReady to avoid implicit any
-  const handleMapCreated = useCallback((mapInstance: LeafletMap) => {
-    mapRef.current = mapInstance;
+  // client-only flag to avoid importing leaflet/react-leaflet on server
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
   }, []);
 
-  // react to mapKey changes if needed (no mutable ref dependency)
+  // Load marker icon assets for Leaflet (client-only)
   useEffect(() => {
-    // placeholder: mapKey can be used to force recreation
-  }, [mapKey]);
-
-  // Load marker icon assets for Leaflet (avoid missing icons)
-  useEffect(() => {
+    if (!isClient) return;
     (async () => {
-      if (typeof window === 'undefined') return;
       try {
         const L = await import('leaflet');
         try {
@@ -111,7 +99,7 @@ export default function AdminPostForm() {
         // ignore
       }
     })();
-  }, []);
+  }, [isClient]);
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -306,6 +294,58 @@ export default function AdminPostForm() {
     } catch {
       return String(v ?? '');
     }
+  };
+
+  /**
+   * ClientMap: مكوّن الخريطة الذي يُحمّل react-leaflet و leaflet فقط على جهة العميل.
+   * - يتجنّب استيراد react-leaflet أثناء SSR.
+   * - يستخدم ref للحصول على مثيل الخريطة (mapRef).
+   */
+  const ClientMap: React.FC<{
+    center: [number, number];
+    zoom: number;
+    marker?: [number, number] | null;
+    setCoords: (c: { lat: number; lng: number }) => void;
+    mapKey: number;
+  }> = ({ center, zoom, marker, setCoords, mapKey: mk }) => {
+    if (!isClient) return null;
+
+    // نحمّل react-leaflet داخل العميل فقط
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const RL = require('react-leaflet') as any;
+    const { MapContainer, TileLayer, Marker, useMapEvents } = RL;
+
+    // MapClick محلي يستخدم useMapEvents من react-leaflet
+    const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords }) => {
+      // useMapEvents يجب أن يُستدعى داخل شجرة MapContainer
+      useMapEvents({
+        click(e: LeafletMouseEvent) {
+          setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+        },
+      });
+      return null;
+    };
+
+    // نستخدم ref callback للحصول على مثيل الخريطة وتخزينه في mapRef
+    const refCallback = (m: any) => {
+      // m قد يكون null أو Map instance
+      mapRef.current = m ?? null;
+    };
+
+    return (
+      // نمرّر ref كمؤقت any لتجنّب تعارض الأنواع مع تعريفات react-leaflet
+      <MapContainer
+        key={mk}
+        ref={refCallback as any}
+        center={center}
+        zoom={zoom}
+        style={{ width: '100%', height: '100%' }}
+      >
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <MapClickLocal setCoords={setCoords} />
+        {marker ? <Marker position={marker as [number, number]} /> : null}
+      </MapContainer>
+    );
   };
 
   return (
@@ -650,22 +690,21 @@ export default function AdminPostForm() {
             <div className="mt-4">
               <div className="text-sm text-gray-300 mb-2">تحرير الموقع تفاعليًا (انقر على الخريطة لتعيين الإحداثيات)</div>
               <div className="w-full h-60 rounded overflow-hidden border border-cyan-600">
-                <MapContainer
-                  key={mapKey}
-                  whenReady={handleMapCreated}
+                {/* ClientMap يُعرض فقط على جهة العميل */}
+                <ClientMap
+                  mapKey={mapKey}
                   center={[
                     editData.location_lat !== '' && editData.location_lat != null ? Number(editData.location_lat) : 33.3128,
                     editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
                   ]}
                   zoom={editData.location_lat ? 13 : 6}
-                  style={{ width: '100%', height: '100%' }}
-                >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <MapClick setCoords={setEditCoords} />
-                  {editData.location_lat != null && editData.location_lng != null && editData.location_lat !== '' && editData.location_lng !== '' ? (
-                    <Marker position={[Number(editData.location_lat), Number(editData.location_lng)] as [number, number]} />
-                  ) : null}
-                </MapContainer>
+                  marker={
+                    editData.location_lat != null && editData.location_lng != null && editData.location_lat !== '' && editData.location_lng !== ''
+                      ? [Number(editData.location_lat), Number(editData.location_lng)]
+                      : null
+                  }
+                  setCoords={setEditCoords}
+                />
               </div>
             </div>
 
