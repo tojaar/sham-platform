@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
@@ -7,7 +9,7 @@ import 'leaflet/dist/leaflet.css';
 
 const MapPicker = dynamic(() => import('@/components/MapPicker'), { ssr: false });
 
-const IMGBB_KEY = process.env.NEXT_PUBLIC_IMGBB_KEY || '';
+const IMGBB_KEY = process.env.NEXT_PUBLIC_IMGBB_KEY ?? '';
 
 async function uploadToImgBB(file: File): Promise<string | null> {
   if (!IMGBB_KEY) {
@@ -29,11 +31,12 @@ async function uploadToImgBB(file: File): Promise<string | null> {
     console.log('ImgBB multipart response:', json);
 
     if (!res.ok || json?.success === false) {
-      const errMsg = json?.error?.message || json?.status?.error_message || `HTTP ${res.status};`;
+      const errMsg =
+        json?.error?.message ?? json?.status?.error_message ?? `HTTP ${res.status};`
       throw new Error(errMsg);
     }
 
-    return json?.data?.display_url || json?.data?.url || null;
+    return json?.data?.display_url ?? json?.data?.url ?? null;
   } catch (e) {
     console.warn('Multipart upload failed, trying base64 fallback', e);
   }
@@ -43,9 +46,9 @@ async function uploadToImgBB(file: File): Promise<string | null> {
     const base64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
-        const r = String(reader.result || '');
+        const r = String(reader.result ?? '');
         const parts = r.split(',');
-        resolve(parts[1] || '');
+        resolve(parts[1] ?? '');
       };
       reader.onerror = (err) => reject(err);
       reader.readAsDataURL(file);
@@ -65,19 +68,35 @@ async function uploadToImgBB(file: File): Promise<string | null> {
     console.log('ImgBB base64 response:', json2);
 
     if (!res2.ok || json2?.success === false) {
-      const errMsg2 = json2?.error?.message || json2?.status?.error_message || `HTTP ${res2.status};`;
+      const errMsg2 =
+        json2?.error?.message ?? json2?.status?.error_message ?? `HTTP ${res2.status};`
       throw new Error(errMsg2);
     }
 
-    return json2?.data?.display_url || json2?.data?.url || null;
+    return json2?.data?.display_url ?? json2?.data?.url ?? null;
   } catch (err) {
     console.error('ImgBB upload failed completely:', err);
     return null;
   }
 }
 
+type FormState = {
+  job_type: string;
+  phone: string;
+  country: string;
+  province: string;
+  city: string;
+  job_location: string;
+  hours: string;
+  salary: string;
+  payment_code: string;
+  transaction_id: string;
+  description: string;
+  image_url: string;
+};
+
 export default function HireForm() {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     job_type: '',
     phone: '',
     country: '',
@@ -92,7 +111,7 @@ export default function HireForm() {
     image_url: '',
   });
 
-  const [location, setLocation] = useState({ lat: 0, lng: 0 });
+  const [location, setLocation] = useState<{ lat: number; lng: number }>({ lat: 0, lng: 0 });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -100,8 +119,8 @@ export default function HireForm() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const handleChange = (field: string, value: string) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+  const handleChange = (field: keyof FormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,7 +145,7 @@ export default function HireForm() {
     setMessage(null);
 
     try {
-      let imageUrl = form.image_url || null;
+      let imageUrl: string | null = form.image_url ?? null;
 
       // إذا تم اختيار ملف، ارفعه واحتفظ بالرابط
       if (file) {
@@ -138,13 +157,13 @@ export default function HireForm() {
           return;
         }
         imageUrl = uploaded;
-        setForm(prev => ({ ...prev, image_url: uploaded }));
+        setForm((prev) => ({ ...prev, image_url: uploaded }));
         setMessage('✅ تم رفع الصورة');
       }
 
       const payload = {
         ...form,
-        hours: parseInt(form.hours) || 0,
+        hours: parseInt(form.hours, 10) || 0,
         map_location: `${location.lat},${location.lng}`,
         approved: null,
         expires_at: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(),
@@ -176,37 +195,40 @@ export default function HireForm() {
         setFile(null);
         setPreviewUrl(null);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ submit error', err);
-      alert('❌ حدث خطأ أثناء الإرسال: ' + (err?.message || String(err)));
+      const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
+      alert('❌ حدث خطأ أثناء الإرسال: ' + msg);
     } finally {
       setLoading(false);
       setMessage(null);
     }
   };
 
+  const fields: Array<[keyof FormState, string]> = [
+    ['job_type', '🧰 نوع الوظيفة'],
+    ['phone', '📞 رقم الهاتف'],
+    ['country', '🌍 الدولة'],
+    ['province', '🏞 المحافظة'],
+    ['city', '🏙 المدينة'],
+    ['job_location', '🏢 مكان العمل'],
+    ['hours', '⏱️ عدد الساعات'],
+    ['salary', '💰 الراتب'],
+    ['payment_code', '💳 رمز شام كاش 10,000 ل.س'],
+    ['transaction_id', '🧾 معرف $1$ USDT'],
+  ];
+
   return (
     <main className="min-h-screen bg-[#0f172a] text-white p-6 font-mono">
       <h1 className="text-3xl font-bold mb-6 text-center text-green-400">📋 نشر إعلان وظيفة</h1>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-        {[
-          ['job_type', '🧰 نوع الوظيفة'],
-          ['phone', '📞 رقم الهاتف'],
-          ['country', '🌍 الدولة'],
-          ['province', '🏞 المحافظة'],
-          ['city', '🏙 المدينة'],
-          ['job_location', '🏢 مكان العمل'],
-          ['hours', '⏱️ عدد الساعات'],
-          ['salary', '💰 الراتب'],
-          ['payment_code', '💳 رمز شام كاش 10,000 ل.س'],
-          ['transaction_id', '🧾 معرف $1$ USDT'],
-        ].map(([key, label]) => (
-          <label key={key} className="flex flex-col gap-1">
+        {fields.map(([key, label]) => (
+          <label key={String(key)} className="flex flex-col gap-1">
             <span className="text-green-300 font-bold">{label}</span>
             <input
               type={key === 'hours' ? 'number' : 'text'}
-              value={(form as any)[key]}
+              value={form[key]}
               onChange={(e) => handleChange(key, e.target.value)}
               required
               className="p-2 rounded bg-gray-800 border border-green-500 text-white"
@@ -249,7 +271,7 @@ export default function HireForm() {
 
         <div className="col-span-1 md:col-span-2">
           <label className="text-green-300 font-bold mb-2 block">📍 اختر الموقع على الخريطة</label>
-          <MapPicker onSelect={(coords) => setLocation(coords)} />
+          <MapPicker onSelect={(coords: { lat: number; lng: number }) => setLocation(coords)} />
           <p className="mt-2 text-sm text-gray-400">المختار: lat {location.lat}, lng {location.lng}</p>
         </div>
 
