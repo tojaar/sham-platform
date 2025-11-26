@@ -28,7 +28,7 @@ type Comm = {
   created_at?: string | null;
   location_lat?: number | null;
   location_lng?: number | null;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 // helper: parse location strings like "lat,lng" or JSON-ish
@@ -57,16 +57,30 @@ const parseLocation = (loc?: string | null) => {
 };
 
 // MapAutoCenter component kept (will be used from react-leaflet once loaded)
-function MapAutoCenter({ map, coords }: { map: any; coords: { lat: number; lng: number } | null }) {
+function MapAutoCenter({ map, coords }: { map: unknown; coords: { lat: number; lng: number } | null }) {
   useEffect(() => {
     if (!map || !coords) return;
     try {
-      map.invalidateSize();
-      map.setView([coords.lat, coords.lng], Math.max(12, map.getZoom ? map.getZoom() : 13), { animate: false });
+      const m = map as {
+        invalidateSize?: () => void;
+        setView?: (center: [number, number], zoom: number, opts?: unknown) => void;
+        getZoom?: () => number;
+      } | null;
+      m?.invalidateSize?.();
+      const currentZoom = typeof m?.getZoom === 'function' ? (m!.getZoom!() as number) : undefined;
+      const zoomTo = currentZoom ? Math.max(12, currentZoom) : 13;
+      m?.setView?.([coords.lat, coords.lng], zoomTo, { animate: false } as unknown);
     } catch {}
   }, [map, coords]);
   return null;
 }
+
+type LeafletComponents = {
+  MapContainer?: React.JSXElementConstructor<unknown>;
+  TileLayer?: React.JSXElementConstructor<unknown>;
+  Marker?: React.JSXElementConstructor<unknown>;
+  Popup?: React.JSXElementConstructor<unknown>;
+};
 
 export default function SearchCommForm() {
   const [comms, setComms] = useState<Comm[]>([]);
@@ -82,16 +96,11 @@ export default function SearchCommForm() {
 
   const [selected, setSelected] = useState<Comm | null>(null);
   const [mapKey, setMapKey] = useState(0);
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<unknown>(null);
 
   // dynamic leaflet/react-leaflet state
   const [LeafletLoaded, setLeafletLoaded] = useState(false);
-  const LeafletRef = useRef<{
-    MapContainer?: any;
-    TileLayer?: any;
-    Marker?: any;
-    Popup?: any;
-  } | null>(null);
+  const LeafletRef = useRef<LeafletComponents | null>(null);
 
   // Load data
   const fetchComms = async () => {
@@ -106,10 +115,11 @@ export default function SearchCommForm() {
         .range(0, 99999);
 
       if (error) throw error;
-      setComms((data || []) as Comm[]);
-    } catch (err: any) {
+      setComms((data ?? []) as Comm[]);
+    } catch (err: unknown) {
       console.error('fetchComms error', err);
-      setMessage('تعذر جلب البيانات: ' + (err?.message ?? String(err)));
+      const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
+      setMessage('تعذر جلب البيانات: ' + msg);
       setComms([]);
     } finally {
       setLoading(false);
@@ -146,17 +156,27 @@ export default function SearchCommForm() {
           });
         }
 
-        const [leaflet, reactLeaflet] = await Promise.all([
-          import('leaflet'),
-          import('react-leaflet')
-        ]);
+        const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
 
         // fix Leaflet icons for bundlers (after leaflet loaded)
         try {
-          const L = leaflet as any;
+          const L = leafletModule as unknown as {
+            Icon?: {
+              Default?: {
+                prototype?: Record<string, unknown>;
+                mergeOptions?: (opts: Record<string, string>) => void;
+              };
+            };
+          };
           if (L && L.Icon && L.Icon.Default) {
-            try { delete L.Icon.Default.prototype._getIconUrl; } catch {}
-            L.Icon.Default.mergeOptions({
+            try {
+              if (L.Icon.Default.prototype && '_getIconUrl' in L.Icon.Default.prototype) {
+                // remove problematic method if present
+                // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+                delete (L.Icon.Default.prototype as Record<string, unknown>)['_getIconUrl'];
+              }
+            } catch {}
+            L.Icon.Default.mergeOptions?.({
               iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
               iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
               shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
@@ -167,28 +187,36 @@ export default function SearchCommForm() {
         }
 
         LeafletRef.current = {
-          MapContainer: reactLeaflet.MapContainer,
-          TileLayer: reactLeaflet.TileLayer,
-          Marker: reactLeaflet.Marker,
-          Popup: reactLeaflet.Popup,
+          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<unknown>,
+          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<unknown>,
+          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<unknown>,
+          Popup: (reactLeafletModule as Record<string, unknown>).Popup as React.JSXElementConstructor<unknown>,
         };
         if (mounted) setLeafletLoaded(true);
       } catch (err) {
         console.error('Failed to load leaflet/react-leaflet dynamically', err);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const countries = useMemo(() => {
     const s = new Set<string>();
-    comms.forEach((x) => { if (x.country) s.add(x.country); });
+    comms.forEach((x) => {
+      if (typeof x.country === 'string' && x.country) s.add(x.country);
+    });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms]);
 
   const provinces = useMemo(() => {
     const s = new Set<string>();
-    comms.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (x.province) s.add(x.province); });
+    comms
+      .filter((x) => (country ? x.country === country : true))
+      .forEach((x) => {
+        if (typeof x.province === 'string' && x.province) s.add(x.province);
+      });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms, country]);
 
@@ -197,13 +225,17 @@ export default function SearchCommForm() {
     comms
       .filter((x) => (country ? x.country === country : true))
       .filter((x) => (province ? x.province === province : true))
-      .forEach((x) => { if (x.city) s.add(x.city); });
+      .forEach((x) => {
+        if (typeof x.city === 'string' && x.city) s.add(x.city);
+      });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms, country, province]);
 
   const categories = useMemo(() => {
     const s = new Set<string>();
-    comms.forEach((x) => { if (x.category) s.add(x.category); });
+    comms.forEach((x) => {
+      if (typeof x.category === 'string' && x.category) s.add(x.category);
+    });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms]);
 
@@ -245,7 +277,10 @@ export default function SearchCommForm() {
     setMapKey((k) => k + 1);
     // small delay so modal opens before map attempts invalidateSize
     setTimeout(() => {
-      try { if (mapRef.current && typeof mapRef.current.invalidateSize === 'function') mapRef.current.invalidateSize(); } catch {}
+      try {
+        const m = mapRef.current as { invalidateSize?: () => void } | null;
+        m?.invalidateSize?.();
+      } catch {}
     }, 200);
   };
 
@@ -347,7 +382,7 @@ export default function SearchCommForm() {
                   <article key={c.id} className="bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 transition flex flex-col">
                     <div className="flex items-start gap-3">
                       <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
-                        {img ? <img src={img} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
+                        {img ? <img src={String(img)} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
                       </div>
 
                       <div className="flex-1 min-w-0">
@@ -379,7 +414,7 @@ export default function SearchCommForm() {
                       className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 flex items-center gap-4 transition"
                     >
                       <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
-                        {img ? <img src={img} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
+                        {img ? <img src={String(img)} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
                        </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-3">
@@ -419,7 +454,7 @@ export default function SearchCommForm() {
               <div className="flex items-center gap-3">
                 {selected.image_url ? (
                   <div className="w-12 h-12 rounded-md overflow-hidden bg-[#07121a] flex items-center justify-center border border-white/6">
-                    <img src={selected.image_url} alt="شعار" className="w-full h-full object-contain" />
+                    <img src={String(selected.image_url)} alt="شعار" className="w-full h-full object-contain" />
                   </div>
                 ) : (
                   <div className="w-12 h-12 rounded-md flex items-center justify-center bg-gradient-to-br from-cyan-500 to-blue-600 text-black font-semibold">Co</div>
@@ -440,7 +475,7 @@ export default function SearchCommForm() {
                 {/* show full image without cropping */}
                 {selected.company_logo ? (
                   <div className="w-full h-56 rounded-md border border-white/6 bg-[#07171b] overflow-hidden flex items-center justify-center">
-                    <img src={selected.company_logo} alt="صورة الإعلان" className="max-w-full max-h-full object-contain" />
+                    <img src={String(selected.company_logo)} alt="صورة الإعلان" className="max-w-full max-h-full object-contain" />
                   </div>
                 ) : (
                   <div className="w-full h-56 bg-[#07171b] rounded-md border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
@@ -451,12 +486,12 @@ export default function SearchCommForm() {
                   <p><strong>الوصف: </strong>{selected.description ?? '—'}</p>
 
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    <div><strong>الشركة:</strong> <div className="text-white/70 inline">{selected.name ?? '—'}</div></div>
-                    
+                    <div><strong>الشركة:</strong> <div className="text-white/70 inline">{(selected as any).name ?? '—'}</div></div>
+
                     <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
                     <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
                     <div><strong>العنوان:</strong> <div className="text-white/70 inline">{selected.address ?? '—'}</div></div>
-                    
+
                   </div>
 
                   <div className="mt-2 text-xs text-white/60">
@@ -470,31 +505,56 @@ export default function SearchCommForm() {
                 {/* react-leaflet map (no iframe) */}
                 {(() => {
                   // determine coords
-                  const loc = parseLocation(selected.location ?? undefined)
-                    ?? (selected.location_lat && selected.location_lng ? { lat: selected.location_lat, lng: selected.location_lng } : null);
+                  const loc =
+                    parseLocation(selected.location ?? undefined) ??
+                    (selected.location_lat && selected.location_lng ? { lat: selected.location_lat, lng: selected.location_lng } : null);
+
                   if (loc) {
                     if (!LeafletLoaded || !LeafletRef.current) {
                       return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
                     }
-                    const { MapContainer, TileLayer, Marker, Popup } = LeafletRef.current as any;
-                    return (
-                      <MapContainer
-                        key={mapKey}
-                        /* @ts-ignore */
-                        whenCreated={(m: any) => { mapRef.current = m; setTimeout(() => { try { (m as any).invalidateSize(); } catch {} }, 120); }}
-                        center={[loc.lat, loc.lng]}
-                        zoom={13}
-                        style={{ height: '100%', width: '100%' }}
-                        scrollWheelZoom={false}
-                      >
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
-                        <MapAutoCenter map={mapRef.current} coords={loc} />
-                        <Marker position={[loc.lat, loc.lng]}>
-                          <Popup>
+                    const comps = LeafletRef.current as LeafletComponents;
+                    const MapContainerComp = comps.MapContainer;
+                    const TileLayerComp = comps.TileLayer;
+                    const MarkerComp = comps.Marker;
+                    const PopupComp = comps.Popup;
+
+                    if (!MapContainerComp || !TileLayerComp || !MarkerComp || !PopupComp) {
+                      return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
+                    }
+
+                    // Use React.createElement to avoid JSX typing issues with runtime-loaded constructors
+                    return React.createElement(
+                      MapContainerComp as React.JSXElementConstructor<unknown>,
+                      {
+                        key: mapKey,
+                        whenCreated: (m: unknown) => {
+                          mapRef.current = m;
+                          setTimeout(() => {
+                            try {
+                              (m as { invalidateSize?: () => void }).invalidateSize?.();
+                            } catch {}
+                          }, 120);
+                        },
+                        center: [loc.lat, loc.lng],
+                        zoom: 13,
+                        style: { height: '100%', width: '100%' },
+                        scrollWheelZoom: false,
+                      },
+                      React.createElement(TileLayerComp as React.JSXElementConstructor<unknown>, {
+                        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        attribution: '&copy; OpenStreetMap contributors',
+                      }),
+                      React.createElement(MapAutoCenter as React.JSXElementConstructor<unknown>, { map: mapRef.current, coords: loc }),
+                      React.createElement(
+                        MarkerComp as React.JSXElementConstructor<unknown>,
+                        { position: [loc.lat, loc.lng] },
+                        React.createElement(PopupComp as React.JSXElementConstructor<unknown>, null, (
+                          <>
                             {selected.title ?? 'موقع'} <br /> {selected.address ?? ''}
-                          </Popup>
-                        </Marker>
-                      </MapContainer>
+                          </>
+                        ))
+                      )
                     );
                   }
                   return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">لا توجد إحداثيات صالحة لعرض الخريطة</div>;
