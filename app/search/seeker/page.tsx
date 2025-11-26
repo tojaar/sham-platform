@@ -1,5 +1,7 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
@@ -65,7 +67,6 @@ export default function SearchSeekerForm() {
       setSeekers(Array.isArray(data) ? (data as Seeker[]) : []);
     } catch (err: unknown) {
       // سجل الخطأ واظهر رسالة مناسبة للمستخدم دون تغيير السلوك
-      // لا نستخدم eslint-disable هنا لأن التعليمة ليست مطلوبة
       console.error('fetchSeekers error', err);
       const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
       setMessage('تعذر جلب البيانات: ' + msg);
@@ -239,7 +240,6 @@ export default function SearchSeekerForm() {
                       </div>
 
                       <div className="flex items-center gap-3 mt-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         {getImageFor(s) ? (
                           <img
                             src={getImageFor(s) as string}
@@ -298,7 +298,6 @@ export default function SearchSeekerForm() {
 
             <div className="p-4 overflow-auto" style={{ maxHeight: '90vh' }}>
               <div className="w-full flex items-center justify-center mb-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {getImageFor(selected) ? (
                   <img
                     src={getImageFor(selected) as string}
