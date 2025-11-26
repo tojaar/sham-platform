@@ -1,13 +1,8 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
-/* NOTE:
-   لا نستورد react-leaflet أو leaflet هنا على مستوى الملف لأن ذلك يؤدي إلى استيراد leaflet أثناء SSR
-   ويسبب خطأ "window is not defined". نحمّل react-leaflet و useMapEvents و TileLayer و Marker داخل ClientMap فقط.
-*/
 import 'leaflet/dist/leaflet.css';
 
 type Ad = {
@@ -43,8 +38,8 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
       keys
         .map((k) => {
           const v = r[k] ?? '';
-          const cell = typeof v === 'string' ? v.replace(/"/g, '""') : String(v ?? '');
-          return "${cell}";
+          const cellValue = typeof v === 'string' ? v.replace(/"/g, '""') : String(v ?? '');
+          return "${cellValue}";
         })
         .join(',')
     )
@@ -299,7 +294,7 @@ export default function AdminPostForm() {
   /**
    * ClientMap: مكوّن الخريطة الذي يُحمّل react-leaflet و leaflet فقط على جهة العميل.
    * - يتجنّب استيراد react-leaflet أثناء SSR.
-   * - يستخدم ref للحصول على مثيل الخريطة (mapRef).
+   * - يستخدم import() ديناميكي داخل useEffect لتجنّب require() ومنع تحذيرات eslint.
    */
   const ClientMap: React.FC<{
     center: [number, number];
@@ -308,42 +303,74 @@ export default function AdminPostForm() {
     setCoords: (c: { lat: number; lng: number }) => void;
     mapKey: number;
   }> = ({ center, zoom, marker, setCoords, mapKey: mk }) => {
-    if (!isClient) return null;
+    const [componentsLoaded, setComponentsLoaded] = useState<{
+      MapContainer: React.ComponentType<Record<string, unknown>>;
+      TileLayer: React.ComponentType<Record<string, unknown>>;
+      Marker: React.ComponentType<Record<string, unknown>>;
+      useMapEvents: (handlers: Record<string, unknown>) => unknown;
+    } | null>(null);
 
-    // نحمّل react-leaflet داخل العميل فقط
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const RL = require('react-leaflet') as any;
-    const { MapContainer, TileLayer, Marker, useMapEvents } = RL;
+    useEffect(() => {
+      let mounted = true;
+      if (!isClient) return;
+      (async () => {
+        try {
+          const mod = await import('react-leaflet');
+          if (!mounted) return;
+          setComponentsLoaded({
+            MapContainer: mod.MapContainer,
+            TileLayer: mod.TileLayer,
+            Marker: mod.Marker,
+            useMapEvents: mod.useMapEvents,
+          });
+        } catch (err) {
+          console.warn('Failed to load react-leaflet dynamically', err);
+        }
+      })();
+      return () => {
+        mounted = false;
+      };
+    }, [isClient]);
 
-    // MapClick محلي يستخدم useMapEvents من react-leaflet
-    const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords }) => {
-      // useMapEvents يجب أن يُستدعى داخل شجرة MapContainer
+    if (!isClient || !componentsLoaded) return null;
+
+    const { MapContainer, TileLayer, Marker: RLMarker, useMapEvents } = componentsLoaded;
+
+    // MapClick local component using the dynamically loaded useMapEvents
+    const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords: sc }) => {
+      // useMapEvents must be called inside MapContainer tree
+      // we pass a handler object typed as Record<string, unknown> to avoid any
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - useMapEvents typing is dynamic here
       useMapEvents({
         click(e: LeafletMouseEvent) {
-          setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+          sc({ lat: e.latlng.lat, lng: e.latlng.lng });
         },
-      });
+      } as Record<string, unknown>);
       return null;
     };
 
-    // نستخدم ref callback للحصول على مثيل الخريطة وتخزينه في mapRef
-    const refCallback = (m: any) => {
-      // m قد يكون null أو Map instance
-      mapRef.current = m ?? null;
+    // ref callback to capture map instance
+    const refCallback: React.RefCallback<unknown> = (m) => {
+      mapRef.current = (m as LeafletMap) ?? null;
     };
 
     return (
-      // نمرّر ref كمؤقت any لتجنّب تعارض الأنواع مع تعريفات react-leaflet
-      <MapContainer
-        key={mk}
-        ref={refCallback as any}
-        center={center}
-        zoom={zoom}
-        style={{ width: '100%', height: '100%' }}
-      >
+      // pass ref callback (typed unknown) to avoid type mismatch with MapContainer props
+      // MapContainer props are provided as Record<string, unknown> to keep types flexible
+      // and avoid using any
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - dynamic component typing
+      <MapContainer key={mk} ref={refCallback} center={center} zoom={zoom} style={{ width: '100%', height: '100%' }}>
+        {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
+        {/* @ts-ignore */}
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <MapClickLocal setCoords={setCoords} />
-        {marker ? <Marker position={marker as [number, number]} /> : null}
+        {marker ? (
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          <RLMarker position={marker as [number, number]} />
+        ) : null}
       </MapContainer>
     );
   };
