@@ -48,6 +48,7 @@ export default function SearchSeekerForm() {
   useEffect(() => {
     fetchSeekers();
     return () => { document.body.style.overflow = ''; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchSeekers() {
@@ -319,7 +320,15 @@ export default function SearchSeekerForm() {
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-white/80">
                 <div className="space-y-2">
                   <div><strong>الهاتف:</strong> <span className="text-white/70 ml-2">{selected.phone ?? '—'}</span></div>
-                  <div><strong>العمر:</strong> <span className="text-white/70 ml-2">{(selected as any).age ?? '—'}</span></div>
+                  <div>
+                    <strong>العمر:</strong>{' '}
+                    <span className="text-white/70 ml-2">
+                      {(() => {
+                        const ageVal = (selected as Record<string, unknown>)['age'];
+                        return (typeof ageVal === 'number' || typeof ageVal === 'string') ? ageVal : '—';
+                      })()}
+                    </span>
+                  </div>
                   <div><strong>الشهادات:</strong> <span className="text-white/70 ml-2">{selected.certificates ?? '—'}</span></div>
                   <div><strong>مكان السكن:</strong> <span className="text-white/70 ml-2">{selected.address ?? '—'}</span></div>
                 </div>
