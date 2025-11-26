@@ -29,7 +29,7 @@ type Seeker = {
   image_url?: string | null;
   imageUrl?: string | null;
   image?: string | null;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 export default function SearchSeekerForm() {
@@ -48,7 +48,6 @@ export default function SearchSeekerForm() {
   useEffect(() => {
     fetchSeekers();
     return () => { document.body.style.overflow = ''; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function fetchSeekers() {
@@ -63,10 +62,14 @@ export default function SearchSeekerForm() {
         .range(0, 99999);
 
       if (error) throw error;
-      setSeekers(data || []);
-    } catch (err: any) {
+      setSeekers(Array.isArray(data) ? (data as Seeker[]) : []);
+    } catch (err: unknown) {
+      // سجل الخطأ واظهر رسالة مناسبة للمستخدم
+      // لا نغير السلوك الوظيفي للصفحة
+      // eslint-disable-next-line no-console
       console.error('fetchSeekers error', err);
-      setMessage('تعذر جلب البيانات: ' + (err?.message || String(err)));
+      const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
+      setMessage('تعذر جلب البيانات: ' + msg);
       setSeekers([]);
     } finally {
       setLoading(false);
@@ -75,13 +78,13 @@ export default function SearchSeekerForm() {
 
   const countries = useMemo(() => {
     const s = new Set<string>();
-    seekers.forEach((x) => { if (x.country) s.add(x.country); });
+    seekers.forEach((x) => { if (typeof x.country === 'string' && x.country) s.add(x.country); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [seekers]);
 
   const provinces = useMemo(() => {
     const s = new Set<string>();
-    seekers.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (x.province) s.add(x.province); });
+    seekers.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (typeof x.province === 'string' && x.province) s.add(x.province); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [seekers, country]);
 
@@ -90,7 +93,7 @@ export default function SearchSeekerForm() {
     seekers
       .filter((x) => (country ? x.country === country : true))
       .filter((x) => (province ? x.province === province : true))
-      .forEach((x) => { if (x.city) s.add(x.city); });
+      .forEach((x) => { if (typeof x.city === 'string' && x.city) s.add(x.city); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [seekers, country, province]);
 
@@ -101,13 +104,13 @@ export default function SearchSeekerForm() {
       if (province && s.province !== province) return false;
       if (city && s.city !== city) return false;
       if (!qLower) return true;
-      return (s.profession || '').toString().toLowerCase().includes(qLower);
+      return (s.profession ?? '').toString().toLowerCase().includes(qLower);
     });
   }, [seekers, country, province, city, q]);
 
-  const getImageFor = (s?: Seeker | null) => {
+  const getImageFor = (s?: Seeker | null): string | null => {
     if (!s) return null;
-    return s.image_url ?? s.imageUrl ?? s.image ?? null;
+    return (s.image_url ?? s.imageUrl ?? s.image ?? null) as string | null;
   };
 
   // نفس دالة parseLocation المستخدمة في صفحة الإدارة
@@ -217,6 +220,8 @@ export default function SearchSeekerForm() {
         <section>
           {loading ? (
             <div className="py-20 text-center text-white/70">جاري التحميل...</div>
+          ) : message ? (
+            <div className="py-12 text-center text-red-400">{message}</div>
           ) : filtered.length === 0 ? (
             <div className="py-12 text-center text-white/60">لا توجد نتائج تطابق بحثك الآن.</div>
           ) : (
@@ -225,16 +230,17 @@ export default function SearchSeekerForm() {
                 <li key={s.id}>
                   <article className="group bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-4 flex items-center gap-4 transition">
                     <div className="w-12 h-12 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      <span className="text-sm">{(s.profession || 'مهنة').slice(0, 2).toUpperCase()}</span>
+                      <span className="text-sm">{(s.profession ?? 'مهنة').slice(0, 2).toUpperCase()}</span>
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-sm sm:text-base font-semibold truncate">{s.profession || '—'}</h3>
+                        <h3 className="text-sm sm:text-base font-semibold truncate">{s.profession ?? '—'}</h3>
                         <time className="text-xs text-white/60">{s.created_at ? new Date(s.created_at).toLocaleString() : ''}</time>
                       </div>
 
                       <div className="flex items-center gap-3 mt-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         {getImageFor(s) ? (
                           <img
                             src={getImageFor(s) as string}
@@ -245,8 +251,8 @@ export default function SearchSeekerForm() {
                           <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-[10px] text-white/50">لا صورة</div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-xs text-white/70 truncate max-w-[220px]">{s.name || 'اسم غير متوفر'}</p>
-                          <p className="text-xs text-white/60 truncate">{s.city || '—'}{s.province ? ` • ${s.province}` : ''}</p>
+                          <p className="text-xs text-white/70 truncate max-w-[220px]">{s.name ?? 'اسم غير متوفر'}</p>
+                          <p className="text-xs text-white/60 truncate">{s.city ?? '—'}{s.province ? ` • ${s.province}` : ''}</p>
                         </div>
                       </div>
                     </div>
@@ -293,6 +299,7 @@ export default function SearchSeekerForm() {
 
             <div className="p-4 overflow-auto" style={{ maxHeight: '90vh' }}>
               <div className="w-full flex items-center justify-center mb-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {getImageFor(selected) ? (
                   <img
                     src={getImageFor(selected) as string}
@@ -306,21 +313,21 @@ export default function SearchSeekerForm() {
                 )}
               </div>
 
-              <h2 className="text-lg font-bold">{selected.profession || '—'}</h2>
-              <p className="text-sm text-white/70 mt-1">{selected.name || '—'}</p>
+              <h2 className="text-lg font-bold">{selected.profession ?? '—'}</h2>
+              <p className="text-sm text-white/70 mt-1">{selected.name ?? '—'}</p>
 
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-white/80">
                 <div className="space-y-2">
-                  <div><strong>الهاتف:</strong> <span className="text-white/70 ml-2">{selected.phone || '—'}</span></div>
-                  <div><strong>العمر:</strong> <span className="text-white/70 ml-2">{selected.age ?? '—'}</span></div>
-                  <div><strong>الشهادات:</strong> <span className="text-white/70 ml-2">{selected.certificates || '—'}</span></div>
-                  <div><strong>مكان السكن:</strong> <span className="text-white/70 ml-2">{selected.address || '—'}</span></div>
+                  <div><strong>الهاتف:</strong> <span className="text-white/70 ml-2">{selected.phone ?? '—'}</span></div>
+                  <div><strong>العمر:</strong> <span className="text-white/70 ml-2">{(selected as any).age ?? '—'}</span></div>
+                  <div><strong>الشهادات:</strong> <span className="text-white/70 ml-2">{selected.certificates ?? '—'}</span></div>
+                  <div><strong>مكان السكن:</strong> <span className="text-white/70 ml-2">{selected.address ?? '—'}</span></div>
                 </div>
 
                 <div className="space-y-2">
-                  <div><strong>المدينة:</strong> <span className="text-white/70 ml-2">{selected.city || '—'}</span></div>
-                  <div><strong>المحافظة:</strong> <span className="text-white/70 ml-2">{selected.province || '—'}</span></div>
-                  <div><strong>الدولة:</strong> <span className="text-white/70 ml-2">{selected.country || '—'}</span></div>
+                  <div><strong>المدينة:</strong> <span className="text-white/70 ml-2">{selected.city ?? '—'}</span></div>
+                  <div><strong>المحافظة:</strong> <span className="text-white/70 ml-2">{selected.province ?? '—'}</span></div>
+                  <div><strong>الدولة:</strong> <span className="text-white/70 ml-2">{selected.country ?? '—'}</span></div>
                   <div><strong>الحالة:</strong> <span className="text-white/70 ml-2">{selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : selected.status ?? 'بانتظار'}</span></div>
                 </div>
               </div>
