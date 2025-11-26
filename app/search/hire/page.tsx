@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase';
 import 'leaflet/dist/leaflet.css';
@@ -34,7 +34,7 @@ type Hire = {
   address?: string | null;
   lat?: number | null;
   lng?: number | null;
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 export default function SearchHirePage() {
@@ -52,75 +52,110 @@ export default function SearchHirePage() {
   // مفتاح لإعادة إنشاء الخريطة داخل الـ modal عند تغيير العنصر المحدد
   const [mapKey, setMapKey] = useState(0);
 
-  // إصلاح مسارات أيقونات Leaflet في المتصفح فقط (بدون أي استيراد لـ Leaflet على السيرفر)
+  // إصلاح مسارات أيقونات Leaflet في المتصفح فقط (بدون require)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const L = require('leaflet');
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-        iconUrl: require('leaflet/dist/images/marker-icon.png'),
-        shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
-      });
-    } catch {}
+    (async () => {
+      try {
+        const L = await import('leaflet');
+        try {
+          if (L && L.Icon && L.Icon.Default && L.Icon.Default.prototype) {
+            // حذف الخاصية بطريقة آمنة
+            try {
+              // Reflect.deleteProperty يتجنب eslint no-dynamic-delete
+              Reflect.deleteProperty(L.Icon.Default.prototype as object, '_getIconUrl');
+            } catch {}
+            L.Icon.Default.mergeOptions?.({
+              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+            });
+          }
+        } catch {}
+      } catch {}
+    })();
   }, []);
 
   // تطبيع بيانات Supabase لتوحيد الحقول
-  const normalize = (raw: any): Hire => {
-    const imageCandidates = [raw.image_url, raw.image, raw.photo, raw.img, raw.picture];
-    const profession = raw.profession ?? raw.job_type ?? raw.role ?? raw.title ?? null;
+  const normalize = (rawInput: unknown): Hire => {
+    const raw = (rawInput && typeof rawInput === 'object') ? (rawInput as Record<string, unknown>) : {};
+
+    const getStr = (k: string) => {
+      const v = raw[k];
+      return typeof v === 'string' && v ? v : undefined;
+    };
+    const getNum = (k: string) => {
+      const v = raw[k];
+      return typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : undefined);
+    };
+
+    const imageCandidates = [
+      raw['image_url'],
+      raw['image'],
+      raw['photo'],
+      raw['img'],
+      raw['picture'],
+    ].map((v) => (typeof v === 'string' ? v : undefined)).filter(Boolean) as string[];
+
+    const profession =
+      (typeof raw['profession'] === 'string' && raw['profession']) ||
+      (typeof raw['job_type'] === 'string' && raw['job_type']) ||
+      (typeof raw['role'] === 'string' && raw['role']) ||
+      (typeof raw['title'] === 'string' && raw['title']) ||
+      null;
 
     let locationStr: string | null = null;
-    if (raw.location && typeof raw.location === 'string') {
-      locationStr = raw.location;
-    } else if (raw.location && typeof raw.location === 'object') {
-      const lat = raw.location.lat ?? raw.location.latitude ?? null;
-      const lng = raw.location.lng ?? raw.location.longitude ?? null;
-      if (lat != null && lng != null) locationStr = `${lat},${lng}`;
-    } else if (raw.coords && typeof raw.coords === 'object') {
-      const lat = raw.coords.lat; const lng = raw.coords.lng;
-      if (lat != null && lng != null) locationStr = `${lat},${lng}`;
-    } else if (raw.lat != null && raw.lng != null) {
-      locationStr = `${raw.lat},${raw.lng}`;
-    } else if (raw.latlng && typeof raw.latlng === 'string') {
-      locationStr = raw.latlng;
-    } else if (raw.map_location && typeof raw.map_location === 'string') {
-      locationStr = raw.map_location;
+
+    if (typeof raw['location'] === 'string') {
+      locationStr = raw['location'] as string;
+    } else if (raw['location'] && typeof raw['location'] === 'object') {
+      const locObj = raw['location'] as Record<string, unknown>;
+      const lat = locObj['lat'] ?? locObj['latitude'] ?? null;
+      const lng = locObj['lng'] ?? locObj['longitude'] ?? null;
+      if (lat != null && lng != null) locationStr = `${Number(lat)},${Number(lng)};`
+    } else if (raw['coords'] && typeof raw['coords'] === 'object') {
+      const coords = raw['coords'] as Record<string, unknown>;
+      const lat = coords['lat']; const lng = coords['lng'];
+      if (lat != null && lng != null) locationStr = `${Number(lat)},${Number(lng)};`
+    } else if (raw['lat'] != null && raw['lng'] != null) {
+      locationStr = `${Number(raw['lat'])},${Number(raw['lng'])};`
+    } else if (typeof raw['latlng'] === 'string') {
+      locationStr = raw['latlng'] as string;
+    } else if (typeof raw['map_location'] === 'string') {
+      locationStr = raw['map_location'] as string;
     }
 
-    const unifiedImage = imageCandidates.find(Boolean) ?? null;
+    const unifiedImage = imageCandidates.length ? imageCandidates[0] : null;
 
     return {
-      id: raw.id,
-      title: raw.title ?? null,
+      id: String(raw['id'] ?? ''),
+      title: typeof raw['title'] === 'string' ? raw['title'] : null,
       profession,
-      name: raw.name ?? raw.full_name ?? null,
-      phone: raw.phone ?? raw.mobile ?? null,
-      salary: raw.salary ?? raw.wage ?? null,
-      description: raw.description ?? raw.details ?? null,
-      hours: raw.hours ?? null,
-      country: raw.country ?? null,
-      province: raw.province ?? null,
-      city: raw.city ?? null,
-      job_location: raw.job_location ?? raw.work_place ?? null,
+      name: typeof raw['name'] === 'string' ? raw['name'] : (typeof raw['full_name'] === 'string' ? raw['full_name'] : null),
+      phone: typeof raw['phone'] === 'string' ? raw['phone'] : (typeof raw['mobile'] === 'string' ? raw['mobile'] : null),
+      salary: getNum('salary') ?? getNum('wage') ?? null,
+      description: typeof raw['description'] === 'string' ? raw['description'] : (typeof raw['details'] === 'string' ? raw['details'] : null),
+      hours: typeof raw['hours'] === 'string' ? raw['hours'] : null,
+      country: typeof raw['country'] === 'string' ? raw['country'] : null,
+      province: typeof raw['province'] === 'string' ? raw['province'] : null,
+      city: typeof raw['city'] === 'string' ? raw['city'] : null,
+      job_location: typeof raw['job_location'] === 'string' ? raw['job_location'] : (typeof raw['work_place'] === 'string' ? raw['work_place'] : null),
       location: locationStr ?? null,
       map_location: locationStr ?? null,
       image_url: unifiedImage,
       image: unifiedImage,
       photo: unifiedImage,
-      approved: raw.approved ?? null,
-      created_at: raw.created_at ?? null,
-      address: raw.address ?? null,
-      lat: raw.lat ?? null,
-      lng: raw.lng ?? null,
+      approved: typeof raw['approved'] === 'boolean' ? raw['approved'] : null,
+      created_at: typeof raw['created_at'] === 'string' ? raw['created_at'] : null,
+      address: typeof raw['address'] === 'string' ? raw['address'] : null,
+      lat: getNum('lat') ?? null,
+      lng: getNum('lng') ?? null,
       ...raw,
     } as Hire;
   };
 
-  // جلب البيانات
-  const fetchHires = async () => {
+  // جلب البيانات (مغلف بـ useCallback لتجنب تحذير deps)
+  const fetchHires = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
@@ -131,30 +166,32 @@ export default function SearchHirePage() {
         .range(0, 99999);
 
       if (error) throw error;
-      const normalized = (data || []).map(normalize);
+      const arr = Array.isArray(data) ? data : [];
+      const normalized = arr.map((d) => normalize(d));
       setHires(normalized);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('fetchHires error', err);
-      setMessage('تعذر جلب البيانات: ' + (err?.message || String(err)));
+      const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
+      setMessage('تعذر جلب البيانات: ' + msg);
       setHires([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchHires();
-  }, []);
+  }, [fetchHires]);
 
   const countries = useMemo(() => {
     const s = new Set<string>();
-    hires.forEach((x) => { if (x.country) s.add(x.country); });
+    hires.forEach((x) => { if (typeof x.country === 'string' && x.country) s.add(x.country); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [hires]);
 
   const provinces = useMemo(() => {
     const s = new Set<string>();
-    hires.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (x.province) s.add(x.province); });
+    hires.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (typeof x.province === 'string' && x.province) s.add(x.province); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [hires, country]);
 
@@ -163,7 +200,7 @@ export default function SearchHirePage() {
     hires
       .filter((x) => (country ? x.country === country : true))
       .filter((x) => (province ? x.province === province : true))
-      .forEach((x) => { if (x.city) s.add(x.city); });
+      .forEach((x) => { if (typeof x.city === 'string' && x.city) s.add(x.city); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [hires, country, province]);
 
@@ -283,9 +320,9 @@ export default function SearchHirePage() {
           ) : (
             <ul className="space-y-3">
               {filtered.map((h) => {
-                const image = safeImage(h.image_url ?? h.image ?? h.photo);
+                const image = safeImage(h.image_url ?? (typeof h.image === 'string' ? h.image : null) ?? (typeof h.photo === 'string' ? h.photo : null));
                 return (
-                  <li key={h.id}>
+                  <li key={String(h.id)}>
                     <article onClick={() => { setSelected(h); setMapKey((k) => k + 1); }} className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-4 flex items-center gap-4 transition">
                       <div className="w-14 h-14 rounded-md overflow-hidden bg-gray-800 flex items-center justify-center flex-shrink-0">
                         {image ? (
@@ -339,11 +376,11 @@ export default function SearchHirePage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
               <div className="space-y-2">
-                {safeImage(selected.image_url ?? selected.image ?? selected.photo) ? (
+                {safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) ? (
                   <div className="w-full h-56 rounded-md border border-white/6 bg-[#07171b] flex items-center justify-center overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={safeImage(selected.image_url ?? selected.image ?? selected.photo) as string}
+                      src={safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) as string}
                       alt="صورة المنشور"
                       className="max-w-full max-h-full object-contain"
                       style={{ display: 'block' }}
