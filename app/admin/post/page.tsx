@@ -1,8 +1,10 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
+import type { MapContainerProps, TileLayerProps, MarkerProps } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 type Ad = {
@@ -295,6 +297,9 @@ export default function AdminPostForm() {
    * ClientMap: مكوّن الخريطة الذي يُحمّل react-leaflet و leaflet فقط على جهة العميل.
    * - يتجنّب استيراد react-leaflet أثناء SSR.
    * - يستخدم import() ديناميكي داخل useEffect لتجنّب require() ومنع تحذيرات eslint.
+   *
+   * ملاحظة: استوردنا أنواع MapContainerProps, TileLayerProps, MarkerProps كـ type-only imports
+   * حتى لا يحدث استيراد وقت التشغيل من react-leaflet أثناء SSR.
    */
   const ClientMap: React.FC<{
     center: [number, number];
@@ -304,10 +309,10 @@ export default function AdminPostForm() {
     mapKey: number;
   }> = ({ center, zoom, marker, setCoords, mapKey: mk }) => {
     const [componentsLoaded, setComponentsLoaded] = useState<{
-      MapContainer: React.ComponentType<Record<string, unknown>>;
-      TileLayer: React.ComponentType<Record<string, unknown>>;
-      Marker: React.ComponentType<Record<string, unknown>>;
-      useMapEvents: (handlers: Record<string, unknown>) => unknown;
+      MapContainer: React.ComponentType<MapContainerProps>;
+      TileLayer: React.ComponentType<TileLayerProps>;
+      Marker: React.ComponentType<MarkerProps>;
+      useMapEvents: (handlers: any) => any;
     } | null>(null);
 
     useEffect(() => {
@@ -339,14 +344,14 @@ export default function AdminPostForm() {
     // MapClick local component using the dynamically loaded useMapEvents
     const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords: sc }) => {
       // useMapEvents must be called inside MapContainer tree
-      // we pass a handler object typed as Record<string, unknown> to avoid any
+      // typing here is intentionally minimal to avoid mismatches with dynamic import
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore - useMapEvents typing is dynamic here
+      // @ts-ignore - dynamic typing for useMapEvents
       useMapEvents({
         click(e: LeafletMouseEvent) {
           sc({ lat: e.latlng.lat, lng: e.latlng.lng });
         },
-      } as Record<string, unknown>);
+      });
       return null;
     };
 
@@ -357,17 +362,13 @@ export default function AdminPostForm() {
 
     return (
       // pass ref callback (typed unknown) to avoid type mismatch with MapContainer props
-      // MapContainer props are provided as Record<string, unknown> to keep types flexible
-      // and avoid using any
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // MapContainer props are provided according to MapContainerProps type imported above
       // @ts-ignore - dynamic component typing
       <MapContainer key={mk} ref={refCallback} center={center} zoom={zoom} style={{ width: '100%', height: '100%' }}>
-        {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
         {/* @ts-ignore */}
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <MapClickLocal setCoords={setCoords} />
         {marker ? (
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
           // @ts-ignore
           <RLMarker position={marker as [number, number]} />
         ) : null}
