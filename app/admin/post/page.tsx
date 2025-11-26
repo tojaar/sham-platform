@@ -42,7 +42,6 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
           const v = r[k] ?? '';
           const cell =
             typeof v === 'string' ? v.replace(/"/g, '""') : String(v ?? '');
-          // keep CSV cells quoted, use comma as separator
           return "${cell}";
         })
         .join(',')
@@ -83,7 +82,7 @@ export default function AdminPostForm() {
 
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // handleMapCreated: typed callback for whenCreated to avoid implicit any
+  // handleMapCreated: typed callback for whenReady to avoid implicit any
   const handleMapCreated = useCallback((mapInstance: LeafletMap) => {
     mapRef.current = mapInstance;
   }, []);
@@ -446,7 +445,7 @@ export default function AdminPostForm() {
                     <td className="p-2">{item.phone ?? '—'}</td>
                     <td className="p-2 text-xs">
                       {item.country ?? '—'} / {item.province ?? '—'} / {item.city ?? '—'}
-                      <div className="mt-1 text-xxs">{item.location_lat != null && item.location_lng != null ? `lat ${item.location_lat}, lng ${item.location_lng}` : 'بدون إحداثيات'}</div>
+                      <div className="mt-1 text-xxs">{item.location_lat != null && item.location_lng != null ? `lat ${item.location_lat}, lng ${item.location_lng} `: 'بدون إحداثيات'}</div>
                     </td>
                     <td className="p-2 text-xs">{item.payment_code ?? '—'} / {item.payment_id ?? '—'}</td>
                     <td className="p-2">{item.approved === true ? '✅' : item.approved === false ? '❌' : '⏳'}</td>
@@ -653,7 +652,7 @@ export default function AdminPostForm() {
               <div className="w-full h-60 rounded overflow-hidden border border-cyan-600">
                 <MapContainer
                   key={mapKey}
-                  whenCreated={handleMapCreated}
+                  whenReady={handleMapCreated}
                   center={[
                     editData.location_lat !== '' && editData.location_lat != null ? Number(editData.location_lat) : 33.3128,
                     editData.location_lng !== '' && editData.location_lng != null ? Number(editData.location_lng) : 44.3615,
