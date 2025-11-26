@@ -102,6 +102,13 @@ export default function SearchCommForm() {
   const [LeafletLoaded, setLeafletLoaded] = useState(false);
   const LeafletRef = useRef<LeafletComponents | null>(null);
 
+  // small helper to safely read string properties from Comm
+  const getString = (obj: Comm | null, key: string) => {
+    if (!obj) return undefined;
+    const v = obj[key];
+    return typeof v === 'string' && v ? v : undefined;
+  };
+
   // Load data
   const fetchComms = async () => {
     setLoading(true);
@@ -171,9 +178,8 @@ export default function SearchCommForm() {
           if (L && L.Icon && L.Icon.Default) {
             try {
               if (L.Icon.Default.prototype && '_getIconUrl' in L.Icon.Default.prototype) {
-                // remove problematic method if present
-                // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-                delete (L.Icon.Default.prototype as Record<string, unknown>)['_getIconUrl'];
+                // remove problematic method if present using Reflect to avoid dynamic-delete lint
+                Reflect.deleteProperty(L.Icon.Default.prototype as object, '_getIconUrl');
               }
             } catch {}
             L.Icon.Default.mergeOptions?.({
@@ -382,6 +388,7 @@ export default function SearchCommForm() {
                   <article key={c.id} className="bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 transition flex flex-col">
                     <div className="flex items-start gap-3">
                       <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         {img ? <img src={String(img)} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
                       </div>
 
@@ -414,6 +421,7 @@ export default function SearchCommForm() {
                       className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 flex items-center gap-4 transition"
                     >
                       <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         {img ? <img src={String(img)} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
                        </div>
                       <div className="flex-1 min-w-0">
@@ -454,6 +462,7 @@ export default function SearchCommForm() {
               <div className="flex items-center gap-3">
                 {selected.image_url ? (
                   <div className="w-12 h-12 rounded-md overflow-hidden bg-[#07121a] flex items-center justify-center border border-white/6">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={String(selected.image_url)} alt="شعار" className="w-full h-full object-contain" />
                   </div>
                 ) : (
@@ -475,6 +484,7 @@ export default function SearchCommForm() {
                 {/* show full image without cropping */}
                 {selected.company_logo ? (
                   <div className="w-full h-56 rounded-md border border-white/6 bg-[#07171b] overflow-hidden flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={String(selected.company_logo)} alt="صورة الإعلان" className="max-w-full max-h-full object-contain" />
                   </div>
                 ) : (
@@ -486,7 +496,7 @@ export default function SearchCommForm() {
                   <p><strong>الوصف: </strong>{selected.description ?? '—'}</p>
 
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    <div><strong>الشركة:</strong> <div className="text-white/70 inline">{(selected as any).name ?? '—'}</div></div>
+                    <div><strong>الشركة:</strong> <div className="text-white/70 inline">{getString(selected, 'name') ?? '—'}</div></div>
 
                     <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
                     <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
@@ -549,11 +559,7 @@ export default function SearchCommForm() {
                       React.createElement(
                         MarkerComp as React.JSXElementConstructor<unknown>,
                         { position: [loc.lat, loc.lng] },
-                        React.createElement(PopupComp as React.JSXElementConstructor<unknown>, null, (
-                          <>
-                            {selected.title ?? 'موقع'} <br /> {selected.address ?? ''}
-                          </>
-                        ))
+                        React.createElement(PopupComp as React.JSXElementConstructor<unknown>, null, `${selected.title ?? 'موقع'}\n${selected.address ?? ''}`)
                       )
                     );
                   }
