@@ -1,20 +1,28 @@
 // app/api/admin/members/[id]/select/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseServer';
+import { createClient } from '@supabase/supabase-js';
 
-type MemberRow = {
-  id: string;
-  invited_selected?: boolean | null;
-  [key: string]: unknown;
-};
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Missing SUPABASE env vars');
+}
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+});
+
+function extractId(pathname: string): string | undefined {
+  // pathname: /api/admin/members/{id}/select
+  const parts = pathname.split('/').filter(Boolean);
+  // last part is 'select', previous is id
+  return parts[parts.length - 2];
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const id = params?.id;
+    const id = extractId(req.nextUrl.pathname);
     if (!id) {
       return NextResponse.json({ error: 'missing_id' }, { status: 400 });
     }
@@ -22,30 +30,22 @@ export async function POST(
     const body = await req.json().catch(() => null);
     const selected: boolean = !!body?.selected;
 
-    const supabase = await getSupabaseServerClient();
-
-    // مرّرنا payload كـ Partial<MemberRow> لتجنّب خطأ "type 'never'"
-    const updatePayload: Partial<MemberRow> = { invited_selected: selected };
-
-    // لا نستخدم generics هنا لتجنّب تعقيدات أنواع المكتبة
-    const res = await supabase
+    const { data, error } = await supabaseAdmin
       .from('producer_members')
-      .update(updatePayload)
+      .update({ invited_selected: selected })
       .eq('id', id)
-      .select('*') // صريح لتقليل استنتاج الأنواع
+      .select()
       .single();
 
-    if (res.error) {
-      console.error('select update error', res.error);
+    if (error) {
+      console.error('select update error', error);
       return NextResponse.json(
-        { error: 'db_error', message: String((res.error as Error).message ?? res.error) },
+        { error: 'db_error', message: String((error as Error).message ?? error) },
         { status: 500 }
       );
     }
 
-    const member = (res.data as MemberRow) ?? null;
-
-    return NextResponse.json({ ok: true, member }, { status: 200 });
+    return NextResponse.json({ ok: true, member: data }, { status: 200 });
   } catch (err: unknown) {
     console.error('select route error', err);
     const message = err instanceof Error ? err.message : String(err);
