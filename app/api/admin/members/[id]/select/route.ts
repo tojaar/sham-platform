@@ -1,28 +1,20 @@
 // app/api/admin/members/[id]/select/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseServerClient } from '@/lib/supabaseServer'; // عدّل المسار إذا كان مختلفاً
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE env vars');
-}
+type MemberRow = {
+  id: string;
+  invited_selected?: boolean | null;
+  [key: string]: unknown;
+};
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
-
-function extractId(pathname: string): string | undefined {
-  // pathname: /api/admin/members/{id}/select
-  const parts = pathname.split('/').filter(Boolean);
-  // last part is 'select', previous is id
-  return parts[parts.length - 2];
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    const id = extractId(req.nextUrl.pathname);
+    const id = params?.id;
     if (!id) {
       return NextResponse.json({ error: 'missing_id' }, { status: 400 });
     }
@@ -30,8 +22,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null);
     const selected: boolean = !!body?.selected;
 
-    const { data, error } = await supabaseAdmin
-      .from('producer_members')
+    const supabase = await getSupabaseServerClient();
+
+    const { data, error } = await supabase
+      .from<MemberRow>('producer_members')
       .update({ invited_selected: selected })
       .eq('id', id)
       .select()
