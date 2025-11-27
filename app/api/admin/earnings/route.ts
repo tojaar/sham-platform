@@ -1,27 +1,57 @@
 // app/api/admin/earnings/route.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE env vars');
-}
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+/**
+ * Route handler آمن لاستعلامات Supabase.
+ * تأكد من ضبط المتغيرات في .env.local أو إعدادات الاستضافة:
+ * SUPABASE_URL
+ * SUPABASE_SERVICE_ROLE_KEY   (أو SUPABASE_ANON_KEY إذا كنت تستخدم مفتاح عميل)
+ */
 
 export async function GET() {
+  // تحقق من متغيرات البيئة داخل الدالة (runtime)
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    return new Response(
+      JSON.stringify({
+        error: 'Missing SUPABASE env vars. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY).',
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
-    const { data, error } = await supabaseAdmin.from('earnings_ladder').select('*').order('level', { ascending: true });
+    // استيراد ديناميكي لمنع التنفيذ أثناء مرحلة البناء
+    const { createClient } = await import('@supabase/supabase-js');
+
+    const supabase = createClient(url, key, { auth: { persistSession: false } });
+
+    const { data, error } = await supabase
+      .from('earnings')
+      .select('id,amount,created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
     if (error) {
-      console.error('earnings fetch error', error);
-      return NextResponse.json({ error: 'db_error', message: String(error.message || error) }, { status: 500 });
+      console.error('Supabase query error:', error);
+      return new Response(JSON.stringify({ error: 'Supabase query failed', details: error }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
-    return NextResponse.json({ rows: data || [] }, { status: 200 });
-  } catch (err: any) {
-    console.error('earnings route error', err);
-    return NextResponse.json({ error: 'server_error', message: String(err?.message || err) }, { status: 500 });
+
+    return new Response(JSON.stringify({ data }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err: unknown) {
+    // تعامل آمن مع الخطأ بدون استخدام any
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Unexpected error in /api/admin/earnings:', message);
+    return new Response(JSON.stringify({ error: 'Internal server error', details: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
