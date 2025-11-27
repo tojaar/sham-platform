@@ -1,7 +1,7 @@
 // app/api/admin/members/[id]/select/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseServer'; // إن لم يعمل alias '@' غيّره إلى المسار النسبي الصحيح
+import { getSupabaseServerClient } from '@/lib/supabaseServer';
 
 type MemberRow = {
   id: string;
@@ -24,23 +24,26 @@ export async function POST(
 
     const supabase = await getSupabaseServerClient();
 
-    // لا نمرّر أي نوع عام داخل from() لتفادي خطأ TypeScript
-    const { data, error } = await supabase
+    // مرّرنا payload كـ Partial<MemberRow> لتجنّب خطأ "type 'never'"
+    const updatePayload: Partial<MemberRow> = { invited_selected: selected };
+
+    // لا نستخدم generics هنا لتجنّب تعقيدات أنواع المكتبة
+    const res = await supabase
       .from('producer_members')
-      .update({ invited_selected: selected })
+      .update(updatePayload)
       .eq('id', id)
-      .select()
+      .select('*') // صريح لتقليل استنتاج الأنواع
       .single();
 
-    if (error) {
-      console.error('select update error', error);
+    if (res.error) {
+      console.error('select update error', res.error);
       return NextResponse.json(
-        { error: 'db_error', message: String((error as Error).message ?? error) },
+        { error: 'db_error', message: String((res.error as Error).message ?? res.error) },
         { status: 500 }
       );
     }
 
-    const member = (data as MemberRow) ?? null;
+    const member = (res.data as MemberRow) ?? null;
 
     return NextResponse.json({ ok: true, member }, { status: 200 });
   } catch (err: unknown) {
