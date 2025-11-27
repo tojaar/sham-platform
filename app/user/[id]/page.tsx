@@ -1,19 +1,20 @@
 // app/user/[id]/page.tsx
 import React from "react";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import CopyInvite from "../../../components/CopyInvite";
 import RewardsClient from "../../../components/RewardsClient";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("Missing Supabase environment variables on server");
+// لا نرمي استثناء أو ننشئ العميل عند مستوى الوحدة لتجنّب فشل البناء.
+// نستخدم مصنعًا يعيد عميل Supabase عند الطلب داخل الـ server component.
+function getSupabaseAdmin(): SupabaseClient | null {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 }
-
-const supabaseAdmin: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false }
-});
 
 type Props = { params: { id: string } };
 type Member = {
@@ -62,6 +63,12 @@ function calcLevelTwoTotals(countLevelTwo: number) {
 }
 
 export default async function UserPage({ params }: Props) {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    // نعيد رسالة واضحة بدل رمي استثناء عند وقت البناء
+    return <main style={{ padding: 20 }}><h1>خطأ: إعدادات Supabase غير مضبوطة على الخادم</h1></main>;
+  }
+
   const id = String(params.id ?? "");
   if (!id) return <main style={{ padding: 20 }}><h1>خطأ: معرف المستخدم غير موجود</h1></main>;
 
