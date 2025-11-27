@@ -1,15 +1,7 @@
 // app/api/admin/members/[id]/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE env vars');
-}
-
-const supabase = await getSupabaseServerClient();
+import { getSupabaseServerClient } from '@/lib/supabaseServer'; // عدّل المسار إذا لم تستخدم alias '@'
 
 // استخراج الـ id من المسار /api/admin/members/{id}
 function extractId(pathname: string): string | undefined {
@@ -20,18 +12,23 @@ function extractId(pathname: string): string | undefined {
 // تعريف نوع العضو لتفادي استخدام any
 type Member = {
   id: string;
-  invite_code_self?: string | number | null;
+  invitecode_self?: string | number | null; // بعض الجداول تستخدم هذا الاسم
+  invitecodeself?: string | number | null;  // وبعضها يستخدم هذا الاسم
+  invitecode?: string | number | null;      // أو هذا
+  invite_code?: string | number | null;     // أو هذا
+  created_at?: string;
   [key: string]: unknown;
 };
 
-// GET: تفاصيل العضو + المدعوين مستوى أول وثاني
 export async function GET(req: NextRequest) {
   try {
     const id = extractId(req.nextUrl.pathname);
     if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
 
+    const supabase = await getSupabaseServerClient();
+
     // العضو الأساسي
-    const { data: memberData, error: memErr } = await supabaseAdmin
+    const { data: memberData, error: memErr } = await supabase
       .from('producer_members')
       .select('*')
       .eq('id', id)
@@ -46,11 +43,19 @@ export async function GET(req: NextRequest) {
     }
     if (!memberData) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
-    // المستوى الأول: من استخدم invite_code = invite_code_self لهذا العضو
-    const { data: level1, error: l1Err } = await supabaseAdmin
+    // استخرج قيمة invitecode_self بأمان بغض النظر عن اسم الحقل في DB
+    const inviteSelf =
+      (memberData as any).invitecode_self ??
+      (memberData as any).invitecodeself ??
+      (memberData as any).invite_code ??
+      (memberData as any).invitecode ??
+      null;
+
+    // المستوى الأول: من استخدم invitecode = invitecode_self لهذا العضو
+    const { data: level1, error: l1Err } = await supabase
       .from('producer_members')
       .select('*')
-      .eq('invite_code', memberData.invite_code_self)
+      .eq('invitecode', inviteSelf) // افترضنا أن عمود المدعو هو invitecode؛ عدّله إن كان مختلفًا
       .order('created_at', { ascending: false });
 
     if (l1Err) {
@@ -61,15 +66,19 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // المستوى الثاني: من استخدم invite_code لأي invite_code_self من المستوى الأول
-    const l1Codes = (level1 ?? []).map((r: Member) => r.invite_code_self).filter(Boolean) as (string | number)[];
+    // المستوى الثاني: من استخدم invitecode لأي invitecode_self من المستوى الأول
+    const l1Codes = (level1 ?? []).map((r: Member) => {
+      return (r as any).invitecode_self ?? (r as any).invitecodeself ?? (r as any).invite_code ?? (r as any).invitecode;
+    }).filter(Boolean) as (string | number)[];
+
     let level2: Member[] = [];
     if (l1Codes.length > 0) {
-      const { data: l2, error: l2Err } = await supabaseAdmin
+      const { data: l2, error: l2Err } = await supabase
         .from('producer_members')
         .select('*')
-        .in('invite_code', l1Codes)
+        .in('invitecode', l1Codes) // افترضنا اسم العمود invitecode أيضاً
         .order('created_at', { ascending: false });
+
       if (l2Err) {
         console.error('level2 fetch error', l2Err);
         return NextResponse.json(
@@ -94,7 +103,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: تحديث حالة العضو (approve/reject/delete)
 export async function POST(req: NextRequest) {
   try {
     const id = extractId(req.nextUrl.pathname);
@@ -102,14 +110,14 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
     const action: string | undefined = body?.action;
-    if (!action) return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
-
-    let statusValue = action;
+    if (!action) return NextResponse.json({ error: 'invalid_action' }, { status: 400 });let statusValue = action;
     if (action === 'approve') statusValue = 'approved';
     if (action === 'reject') statusValue = 'rejected';
     if (action === 'delete') statusValue = 'deleted';
 
-    const { data, error } = await supabaseAdmin
+    const supabase = await getSupabaseServerClient();
+
+    const { data, error } = await supabase
       .from('producer_members')
       .update({ status: statusValue })
       .eq('id', id)
