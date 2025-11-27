@@ -1,7 +1,7 @@
 // app/api/admin/members/[id]/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseServer'; // عدّل المسار إذا لم تستخدم alias '@'
+import { getSupabaseServerClient } from '@/lib/supabaseServer'; // إذا لم تستخدم alias '@' غيّر إلى المسار النسبي الصحيح
 
 // استخراج الـ id من المسار /api/admin/members/{id}
 function extractId(pathname: string): string | undefined {
@@ -17,6 +17,7 @@ type Member = {
   invitecode?: string | number | null;
   invite_code?: string | number | null;
   created_at?: string;
+  status?: string | null;
   [key: string]: unknown;
 };
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
 
     const supabase = await getSupabaseServerClient();
 
-    // العضو الأساسي
+    // جلب بيانات العضو الأساسي
     const { data: memberData, error: memErr } = await supabase
       .from('producer_members')
       .select('*')
@@ -72,6 +73,14 @@ export async function GET(req: NextRequest) {
       'invite_code',
       'invitecode',
     ]);
+
+    // إذا لم يكن لدى العضو رمز دعوة، نعيد العضو فقط
+    if (inviteSelf == null) {
+      return NextResponse.json(
+        { member: memberData, referrals: { level1: [], level2: [] } },
+        { status: 200 }
+      );
+    }
 
     // المستوى الأول: من استخدم invitecode = invitecode_self لهذا العضو
     const { data: level1Raw, error: l1Err } = await supabase
@@ -118,9 +127,8 @@ export async function GET(req: NextRequest) {
         );
       }
       level2 = Array.isArray(l2Raw) ? (l2Raw as Member[]) : [];
-    }
-
-    return NextResponse.json({
+    }return NextResponse.json(
+      {
         member: memberData,
         referrals: { level1, level2 },
       },
