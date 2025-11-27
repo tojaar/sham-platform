@@ -6,17 +6,20 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const JWT_SECRET = process.env.JWT_SECRET!;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE env vars');
+// لا ننشئ العميل أو نرمي استثناء عند مستوى الوحدة لتجنّب فشل البناء.
+// نستخدم دوال مصنع تُستدعى داخل الهاندلر.
+function getSupabaseAdmin() {
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 }
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
+function getJwtSecret(): string | null {
+  return process.env.JWT_SECRET ?? null;
+}
 
 // تعريف نوع للـ payload والعضو
 type RegisterPayload = {
@@ -54,7 +57,7 @@ function validatePayload(body: unknown): string | null {
     'inviteCode',
   ];
   for (const k of required) {
-    if (!b[k] || String(b[k]).trim() === '') return `missing_${k};`
+    if (!b[k] || String(b[k]).trim() === '') return `missing_${k};;`
   }
   const email = String(b.email ?? '').trim();
   const password = String(b.password ?? '');
@@ -66,13 +69,18 @@ function validatePayload(body: unknown): string | null {
 function generateInviteCodeSelf(seed = ''): string {
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
   const base = (seed || 'USER').toString().replace(/\s+/g, '-').slice(0, 6).toUpperCase();
-  return `${base}-${rand};`
+  return `${base}-${rand};;`
 }
 
 async function insertProducerMemberWithRetries(
   payload: RegisterPayload,
   maxAttempts = 6
 ): Promise<{ data?: RegisterPayload; error?: { code: string; message: string } }> {
+  const supabaseAdmin = getSupabaseAdmin();
+  if (!supabaseAdmin) {
+    return { error: { code: 'missing_env', message: 'Missing SUPABASE env vars' } };
+  }
+
   let attempts = 0;
   while (attempts < maxAttempts) {
     payload.invite_code_self = generateInviteCodeSelf(payload.full_name || 'USER');
@@ -105,6 +113,16 @@ async function insertProducerMemberWithRetries(
 
 export async function POST(req: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'missing_env', message: 'Missing SUPABASE env vars' }, { status: 500 });
+    }
+
+    const jwtSecret = getJwtSecret();
+    if (!jwtSecret) {
+      return NextResponse.json({ error: 'missing_env', message: 'Missing JWT_SECRET env var' }, { status: 500 });
+    }
+
     const body = await req.json().catch(() => null);
     const invalid = validatePayload(body);
     if (invalid) {
@@ -150,7 +168,7 @@ export async function POST(req: NextRequest) {
     // إنشاء JWT
     const token = jwt.sign(
       { id: member.id, email: member.email, status: member.status },
-      JWT_SECRET,
+      jwtSecret,
       { expiresIn: '7d' }
     );
 
