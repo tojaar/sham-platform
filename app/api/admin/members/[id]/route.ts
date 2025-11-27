@@ -12,13 +12,35 @@ function extractId(pathname: string): string | undefined {
 // تعريف نوع العضو لتفادي استخدام any
 type Member = {
   id: string;
-  invitecode_self?: string | number | null; // بعض الجداول تستخدم هذا الاسم
-  invitecodeself?: string | number | null;  // وبعضها يستخدم هذا الاسم
-  invitecode?: string | number | null;      // أو هذا
-  invite_code?: string | number | null;     // أو هذا
+  invitecode_self?: string | number | null;
+  invitecodeself?: string | number | null;
+  invitecode?: string | number | null;
+  invite_code?: string | number | null;
   created_at?: string;
   [key: string]: unknown;
 };
+
+/**
+ * دالة مساعدة آمنة لاستخراج قيمة من كائن غير مؤكد النوع.
+ * تحاول قراءة الحقول بالترتيب المعطى وتعيد القيمة إذا كانت من النوع المطلوب.
+ */
+function getField<T extends string | number | null>(
+  obj: unknown,
+  keys: string[]
+): T | null {
+  if (obj == null || typeof obj !== 'object') return null;
+  const record = obj as Record<string, unknown>;
+  for (const k of keys) {
+    if (k in record) {
+      const v = record[k];
+      if (v === null) return null;
+      if (typeof v === 'string' || typeof v === 'number') {
+        return v as T;
+      }
+    }
+  }
+  return null;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,18 +66,18 @@ export async function GET(req: NextRequest) {
     if (!memberData) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
     // استخرج قيمة invitecode_self بأمان بغض النظر عن اسم الحقل في DB
-    const inviteSelf =
-      (memberData as any).invitecode_self ??
-      (memberData as any).invitecodeself ??
-      (memberData as any).invite_code ??
-      (memberData as any).invitecode ??
-      null;
+    const inviteSelf = getField<string | number | null>(memberData, [
+      'invitecode_self',
+      'invitecodeself',
+      'invite_code',
+      'invitecode',
+    ]);
 
     // المستوى الأول: من استخدم invitecode = invitecode_self لهذا العضو
-    const { data: level1, error: l1Err } = await supabase
+    const { data: level1Raw, error: l1Err } = await supabase
       .from('producer_members')
       .select('*')
-      .eq('invitecode', inviteSelf) // افترضنا أن عمود المدعو هو invitecode؛ عدّله إن كان مختلفًا
+      .eq('invitecode', inviteSelf)
       .order('created_at', { ascending: false });
 
     if (l1Err) {
@@ -66,17 +88,26 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const level1 = Array.isArray(level1Raw) ? (level1Raw as Member[]) : [];
+
     // المستوى الثاني: من استخدم invitecode لأي invitecode_self من المستوى الأول
-    const l1Codes = (level1 ?? []).map((r: Member) => {
-      return (r as any).invitecode_self ?? (r as any).invitecodeself ?? (r as any).invite_code ?? (r as any).invitecode;
-    }).filter(Boolean) as (string | number)[];
+    const l1Codes = level1
+      .map((r) =>
+        getField<string | number | null>(r, [
+          'invitecode_self',
+          'invitecodeself',
+          'invite_code',
+          'invitecode',
+        ])
+      )
+      .filter((v): v is string | number => v !== null);
 
     let level2: Member[] = [];
     if (l1Codes.length > 0) {
-      const { data: l2, error: l2Err } = await supabase
+      const { data: l2Raw, error: l2Err } = await supabase
         .from('producer_members')
         .select('*')
-        .in('invitecode', l1Codes) // افترضنا اسم العمود invitecode أيضاً
+        .in('invitecode', l1Codes)
         .order('created_at', { ascending: false });
 
       if (l2Err) {
@@ -86,13 +117,12 @@ export async function GET(req: NextRequest) {
           { status: 500 }
         );
       }
-      level2 = (l2 ?? []) as Member[];
+      level2 = Array.isArray(l2Raw) ? (l2Raw as Member[]) : [];
     }
 
-    return NextResponse.json(
-      {
+    return NextResponse.json({
         member: memberData,
-        referrals: { level1: level1 ?? [], level2 },
+        referrals: { level1, level2 },
       },
       { status: 200 }
     );
@@ -110,7 +140,9 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
     const action: string | undefined = body?.action;
-    if (!action) return NextResponse.json({ error: 'invalid_action' }, { status: 400 });let statusValue = action;
+    if (!action) return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
+
+    let statusValue = action;
     if (action === 'approve') statusValue = 'approved';
     if (action === 'reject') statusValue = 'rejected';
     if (action === 'delete') statusValue = 'deleted';
