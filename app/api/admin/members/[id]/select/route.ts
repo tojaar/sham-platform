@@ -1,7 +1,7 @@
 // app/api/admin/members/[id]/select/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSupabaseServerClient } from '@/lib/supabaseServer'; // عدّل المسار إذا كان مختلفاً
+import { getSupabaseServerClient } from '@/lib/supabaseServer'; // إن لم يعمل alias '@' غيّره إلى المسار النسبي الصحيح
 
 type MemberRow = {
   id: string;
@@ -24,8 +24,9 @@ export async function POST(
 
     const supabase = await getSupabaseServerClient();
 
+    // ملاحظة: لا نمرّر النوع العام داخل from<...>() لأن تعريف المكتبة يتطلب نوعين عامّين.
     const { data, error } = await supabase
-      .from<MemberRow>('producer_members')
+      .from('producer_members')
       .update({ invited_selected: selected })
       .eq('id', id)
       .select()
@@ -39,7 +40,10 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({ ok: true, member: data }, { status: 200 });
+    // نحوّل النتيجة إلى النوع المحلي MemberRow قبل الإرجاع
+    const member = (data as MemberRow) ?? null;
+
+    return NextResponse.json({ ok: true, member }, { status: 200 });
   } catch (err: unknown) {
     console.error('select route error', err);
     const message = err instanceof Error ? err.message : String(err);
