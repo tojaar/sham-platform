@@ -9,9 +9,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing SUPABASE env vars');
 }
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
+const supabase = await getSupabaseServerClient();
 
 // استخراج الـ id من المسار /api/admin/members/{id}
 function extractId(pathname: string): string | undefined {
