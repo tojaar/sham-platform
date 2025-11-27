@@ -4,11 +4,12 @@ import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { PostgrestError } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error('Missing SUPABASE env vars');
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+function getSupabaseAdmin() {
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+}
 
 function extractId(pathname: string): string | undefined {
   const parts = pathname.split('/').filter(Boolean);
@@ -23,6 +24,11 @@ type MemberRow = Record<string, unknown>;
 
 export async function GET(req: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'missing_env', message: 'Missing SUPABASE env vars' }, { status: 500 });
+    }
+
     const id = extractId(req.nextUrl.pathname);
     if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
 
@@ -35,7 +41,10 @@ export async function GET(req: NextRequest) {
 
     if (ownerErr) {
       console.error('[user/referrals] owner fetch error', ownerErr);
-      return NextResponse.json({ error: 'db_error', message: String((ownerErr as PostgrestError)?.message ?? ownerErr) }, { status: 500 });
+      return NextResponse.json(
+        { error: 'db_error', message: String((ownerErr as PostgrestError)?.message ?? ownerErr) },
+        { status: 500 }
+      );
     }
     if (!owner) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
@@ -51,7 +60,10 @@ export async function GET(req: NextRequest) {
 
     if (byRefErr) {
       console.error('[user/referrals] byRef error', byRefErr);
-      return NextResponse.json({ error: 'db_error', message: String((byRefErr as PostgrestError)?.message ?? byRefErr) }, { status: 500 });
+      return NextResponse.json(
+        { error: 'db_error', message: String((byRefErr as PostgrestError)?.message ?? byRefErr) },
+        { status: 500 }
+      );
     }
     const directByRef: MemberRow[] = Array.isArray(byRef) ? byRef : [];
 
@@ -60,7 +72,7 @@ export async function GET(req: NextRequest) {
     if (ownerCode) {
       try {
         // حاول الاستعلام مباشرةً باستخدام or مع ilike على الحقول المناسبة
-        const orQuery = `invite_code.ilike.%${ownerCode}%,invite_code_self.ilike.%${ownerCode}%;`
+        const orQuery = `invite_code.ilike.%${ownerCode}%,invite_code_self.ilike.%${ownerCode}%;;`
         const { data: byCode, error: byCodeErr } = await supabaseAdmin
           .from('producer_members')
           .select('id, full_name, email, created_at, referrer_id, invite_code, invited_selected, invite_code_self, status')
@@ -81,7 +93,7 @@ export async function GET(req: NextRequest) {
 
           if (!fallbackErr) {
             const arr: MemberRow[] = Array.isArray(fallback) ? fallback : [];
-            directByCode = arr.filter(r => {
+            directByCode = arr.filter((r: MemberRow) => {
               const ic = norm(r.invite_code);
               const ics = norm(r.invite_code_self);
               return ic === ownerCode || ics === ownerCode;
@@ -102,8 +114,8 @@ export async function GET(req: NextRequest) {
     const level1: MemberRow[] = Array.from(map1.values());
 
     // المستوى الثاني: بناءً على referrer_id في level1 أو invite_code المطابق لأي invite_code_self من level1
-    const level1Ids = level1.map(r => String(r.id ?? '')).filter(Boolean);
-    const level1InviteSelfs = level1.map(r => norm(r.invite_code_self)).filter(Boolean);
+    const level1Ids = level1.map((r) => String(r.id ?? '')).filter(Boolean);
+    const level1InviteSelfs = level1.map((r) => norm(r.invite_code_self)).filter(Boolean);
 
     let level2: MemberRow[] = [];
     if (level1Ids.length) {
@@ -121,7 +133,7 @@ export async function GET(req: NextRequest) {
     if (level1InviteSelfs.length) {
       try {
         // بناء استعلام OR من invite_code.ilike.%code% لكل كود
-        const orParts = level1InviteSelfs.map(c => `invite_code.ilike.%${c}%`).join(',');
+        const orParts = level1InviteSelfs.map((c) => `invite_code.ilike.%${c}%`).join(',');
         if (orParts) {
           const { data: l2code, error: l2codeErr } = await supabaseAdmin
             .from('producer_members')
@@ -147,15 +159,17 @@ export async function GET(req: NextRequest) {
 
         if (!fallbackL2Err) {
           const arr: MemberRow[] = Array.isArray(fallbackL2) ? fallbackL2 : [];
-          const sset = new Set(level1InviteSelfs.map(x => x.toLowerCase()));
-          level2 = level2.concat(arr.filter(r => sset.has(norm(r.invite_code).toLowerCase())));
+          const sset = new Set(level1InviteSelfs.map((x) => x.toLowerCase()));
+          level2 = level2.concat(
+            arr.filter((r: MemberRow) => sset.has(norm(r.invite_code).toLowerCase()))
+          );
         }
       }
     }
 
     // إزالة التكرار في level2
     const map2 = new Map<string, MemberRow>();
-    level2.forEach(r => {
+    level2.forEach((r) => {
       const rid = String(r.id ?? '');
       if (rid) map2.set(rid, r);
     });
