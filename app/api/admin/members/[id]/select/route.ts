@@ -1,27 +1,28 @@
 // app/api/admin/members/[id]/select/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE env vars');
+function getSupabaseAdmin(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
 }
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
 
 function extractId(pathname: string): string | undefined {
   // pathname: /api/admin/members/{id}/select
   const parts = pathname.split('/').filter(Boolean);
-  // last part is 'select', previous is id
   return parts[parts.length - 2];
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'missing_env', message: 'Missing SUPABASE env vars' }, { status: 500 });
+    }
+
     const id = extractId(req.nextUrl.pathname);
     if (!id) {
       return NextResponse.json({ error: 'missing_id' }, { status: 400 });
