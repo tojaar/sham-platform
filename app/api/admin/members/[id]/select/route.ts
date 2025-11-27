@@ -24,7 +24,7 @@ export async function POST(
 
     const supabase = await getSupabaseServerClient();
 
-    // ملاحظة: لا نمرّر النوع العام داخل from<...>() لأن تعريف المكتبة يتطلب نوعين عامّين.
+    // لا نمرّر أي نوع عام داخل from() لتفادي خطأ TypeScript
     const { data, error } = await supabase
       .from('producer_members')
       .update({ invited_selected: selected })
@@ -40,7 +40,6 @@ export async function POST(
       );
     }
 
-    // نحوّل النتيجة إلى النوع المحلي MemberRow قبل الإرجاع
     const member = (data as MemberRow) ?? null;
 
     return NextResponse.json({ ok: true, member }, { status: 200 });
