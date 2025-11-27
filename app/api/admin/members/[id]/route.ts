@@ -1,17 +1,7 @@
 // app/api/admin/members/[id]/route.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE env vars');
-}
-
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
-});
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 type MemberRow = {
   id: string;
@@ -34,6 +24,14 @@ type MemberRow = {
   [key: string]: unknown;
 };
 
+// مصنع آمن يعيد عميل Supabase أو null إن كانت المتغيرات مفقودة
+function getSupabaseAdmin(): SupabaseClient | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
 // استخراج الـ id من المسار /api/admin/members/{id}
 function extractId(pathname: string): string | undefined {
   const parts = pathname.split('/').filter(Boolean);
@@ -43,6 +41,11 @@ function extractId(pathname: string): string | undefined {
 // GET: تفاصيل العضو + المدعوين مستوى أول وثاني
 export async function GET(req: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'missing_env', message: 'Missing SUPABASE env vars' }, { status: 500 });
+    }
+
     const id = extractId(req.nextUrl.pathname);
     if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
 
@@ -84,7 +87,9 @@ export async function GET(req: NextRequest) {
     }
 
     // المستوى الثاني: من استخدم invite_code لأي invite_code_self من المستوى الأول
-    const l1Codes = level1.map((r) => r.invite_code_self).filter(Boolean) as string[];
+    const l1Codes = level1
+      .map((r) => r.invite_code_self)
+      .filter((c): c is string => Boolean(c && typeof c === 'string'));
     let level2: MemberRow[] = [];
     if (l1Codes.length > 0) {
       const l2Res = await supabaseAdmin
@@ -121,9 +126,16 @@ export async function GET(req: NextRequest) {
 // POST: تحديث حالة العضو (approve/reject/delete)
 export async function POST(req: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'missing_env', message: 'Missing SUPABASE env vars' }, { status: 500 });
+    }
+
     const id = extractId(req.nextUrl.pathname);
-    if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });const body = await req.json().catch(() => null);
-    const action = body?.action as string | undefined;
+    if (!id) return NextResponse.json({ error: 'missing_id' }, { status: 400 });
+
+    const body = await req.json().catch(() => null);
+    const action = typeof body?.action === 'string' ? body.action : undefined;
     if (!action) return NextResponse.json({ error: 'invalid_action' }, { status: 400 });
 
     let statusValue = action;
