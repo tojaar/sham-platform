@@ -2,10 +2,21 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
 import type { MapContainerProps, TileLayerProps, MarkerProps } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+
+/**
+ * ملاحظة مهمة حول Supabase:
+ * لا نستورد العميل مباشرة عند مستوى الوحدة لتجنب إنشاء العميل أثناء SSR/prerender.
+ * بدلاً من ذلك نستخدم استيرادًا ديناميكياً داخل الدوال التي تعمل على جهة العميل فقط.
+ */
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
+
+/* ---------- Types ---------- */
 
 type Ad = {
   id: string;
@@ -30,7 +41,8 @@ type Ad = {
   location_lng?: number | '' | null;
 };
 
-// helper: convert rows to CSV
+/* ---------- Helpers ---------- */
+
 const toCSV = (rows: Array<Record<string, unknown>>): string => {
   if (!rows || rows.length === 0) return '';
   const keys = Object.keys(rows[0]);
@@ -49,6 +61,84 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
   return `${header}\n${body};`
 };
 
+function fmt(v: unknown): string {
+  try {
+    const d = new Date(String(v));
+    if (Number.isNaN(d.getTime())) return String(v ?? '');
+    return d.toLocaleString();
+  } catch {
+    return String(v ?? '');
+  }
+}
+
+/* ---------- Component: ClientMap (dynamic react-leaflet loader) ---------- */
+
+const ClientMap: React.FC<{
+  center: [number, number];
+  zoom: number;
+  marker?: [number, number] | null;
+  setCoords: (c: { lat: number; lng: number }) => void;
+  mapKey: number;
+}> = ({ center, zoom, marker, setCoords, mapKey: mk }) => {
+  type RLModule = {
+    MapContainer: React.ComponentType<MapContainerProps>;
+    TileLayer: React.ComponentType<TileLayerProps>;
+    Marker: React.ComponentType<MarkerProps>;
+    useMapEvents: (handlers: { click?: (e: LeafletMouseEvent) => void }) => LeafletMap | null;
+  };
+
+  const [componentsLoaded, setComponentsLoaded] = useState<RLModule | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    if (typeof window === 'undefined') return;
+    (async () => {
+      try {
+        const mod = (await import('react-leaflet')) as unknown as RLModule;
+        if (!mounted) return;
+        setComponentsLoaded(mod);
+      } catch (err) {
+        console.warn('Failed to load react-leaflet dynamically', err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (!componentsLoaded) return null;
+
+  const { MapContainer, TileLayer, Marker: RLMarker, useMapEvents } = componentsLoaded;
+
+  const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords: sc }) => {
+    const mapInstance = useMapEvents({
+      click(e: LeafletMouseEvent) {
+        sc({ lat: e.latlng.lat, lng: e.latlng.lng });
+      },
+    });
+
+    useEffect(() => {
+      mapRef.current = mapInstance ?? null;
+      return () => {
+        if (mapRef.current === mapInstance) mapRef.current = null;
+      };
+    }, [mapInstance]);
+
+    return null;
+  };
+
+  return (
+    <MapContainer key={mk} center={center} zoom={zoom} style={{ width: '100%', height: '100%' }}>
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <MapClickLocal setCoords={setCoords} />
+      {marker ? <RLMarker position={marker as [number, number]} /> : null}
+    </MapContainer>
+  );
+};
+
+/* ---------- Main Component ---------- */
+
 export default function AdminPostForm() {
   const [posts, setPosts] = useState<Ad[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -66,12 +156,10 @@ export default function AdminPostForm() {
   const [editData, setEditData] = useState<Partial<Ad>>({});
   const [mapKey, setMapKey] = useState<number>(0);
 
-  // mapRef holds the Leaflet Map instance for imperative actions
   const mapRef = useRef<LeafletMap | null>(null);
-
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
 
-  // Load marker icon assets for Leaflet (client-only)
+  /* Load Leaflet icons (client-only) */
   useEffect(() => {
     if (typeof window === 'undefined') return;
     (async () => {
@@ -92,10 +180,12 @@ export default function AdminPostForm() {
     })();
   }, []);
 
+  /* Fetch posts (client-side) */
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase.from('ads').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       setPosts((data ?? []) as Ad[]);
@@ -109,6 +199,7 @@ export default function AdminPostForm() {
   }, []);
 
   useEffect(() => {
+    // تشغيل الجلب على المتصفح فقط
     fetchPosts();
   }, [fetchPosts]);
 
@@ -121,6 +212,7 @@ export default function AdminPostForm() {
     async (id: string, action: 'approve' | 'reject' | 'delete') => {
       setMessage(null);
       try {
+        const supabase = await getSupabase();
         if (action === 'delete') {
           const { error } = await supabase.from('ads').delete().eq('id', id);
           if (error) throw error;
@@ -150,6 +242,7 @@ export default function AdminPostForm() {
       setMessage(null);
       setLoading(true);
       try {
+        const supabase = await getSupabase();
         if (action === 'delete') {
           const { error } = await supabase.from('ads').delete().in('id', ids);
           if (error) throw error;
@@ -187,19 +280,17 @@ export default function AdminPostForm() {
     setMessage(null);
     setLoading(true);
     try {
-      // prepare payload
       const payload: Record<string, unknown> = { ...editData };
 
-      // Normalize empty strings to null for numeric/location fields
       if (payload.location_lat === '') payload.location_lat = null;
       if (payload.location_lng === '') payload.location_lng = null;
       if (payload.price === '') payload.price = null;
 
-      // If price should be numeric in DB, convert strings that look like numbers
       if (typeof payload.price === 'string' && payload.price.trim() !== '' && !Number.isNaN(Number(payload.price))) {
         payload.price = Number(payload.price);
       }
 
+      const supabase = await getSupabase();
       const { error } = await supabase.from('ads').update(payload).eq('id', editId);
       if (error) throw error;
       setEditId(null);
@@ -213,6 +304,16 @@ export default function AdminPostForm() {
       setLoading(false);
     }
   }, [editData, editId, refresh]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((s) => ({ ...s, [id]: !s[id] }));
+  }, []);
+
+  const setEditCoords = useCallback((c: { lat: number; lng: number }) => {
+    setEditData((d) => ({ ...d, location_lat: c.lat, location_lng: c.lng }));
+  }, []);
+
+  /* Filters, pagination, export */
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -269,92 +370,7 @@ export default function AdminPostForm() {
     URL.revokeObjectURL(url);
   }, [filtered]);
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((s) => ({ ...s, [id]: !s[id] }));
-  }, []);
-
-  const setEditCoords = useCallback((c: { lat: number; lng: number }) => {
-    setEditData((d) => ({ ...d, location_lat: c.lat, location_lng: c.lng }));
-  }, []);
-
-  const fmt = (v: unknown): string => {
-    try {
-      const d = new Date(String(v));
-      if (Number.isNaN(d.getTime())) return String(v ?? '');
-      return d.toLocaleString();
-    } catch {
-      return String(v ?? '');
-    }
-  };
-
-  /**
-   * ClientMap: مكوّن الخريطة الذي يُحمّل react-leaflet و leaflet فقط على جهة العميل.
-   * - نعرّف توقيعًا نوعيًا دقيقًا للمكوّنات المستوردة لتجنّب استخدام any.
-   * - لا نمرّر prop "ref" إلى MapContainer لأن تعريفات react-leaflet لا تتوقعه.
-   * - نلتقط مثيل الخريطة داخل MapClickLocal عبر useMapEvents ونخزّنه في mapRef.
-   */
-  const ClientMap: React.FC<{
-    center: [number, number];
-    zoom: number;
-    marker?: [number, number] | null;
-    setCoords: (c: { lat: number; lng: number }) => void;
-    mapKey: number;
-  }> = ({ center, zoom, marker, setCoords, mapKey: mk }) => {
-    type RLModule = {
-      MapContainer: React.ComponentType<MapContainerProps>;
-      TileLayer: React.ComponentType<TileLayerProps>;
-      Marker: React.ComponentType<MarkerProps>;
-      useMapEvents: (handlers: { click?: (e: LeafletMouseEvent) => void }) => LeafletMap | null;
-    };
-
-    const [componentsLoaded, setComponentsLoaded] = useState<RLModule | null>(null);
-
-    useEffect(() => {
-      let mounted = true;
-      if (typeof window === 'undefined') return;
-      (async () => {
-        try {
-          const mod = (await import('react-leaflet')) as unknown as RLModule;
-          if (!mounted) return;
-          setComponentsLoaded(mod);
-        } catch (err) {
-          console.warn('Failed to load react-leaflet dynamically', err);
-        }
-      })();
-      return () => {
-        mounted = false;
-      };
-    }, []);
-
-    if (!componentsLoaded) return null;
-
-    const { MapContainer, TileLayer, Marker: RLMarker, useMapEvents } = componentsLoaded;
-
-    const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords: sc }) => {
-      const mapInstance = useMapEvents({
-        click(e: LeafletMouseEvent) {
-          sc({ lat: e.latlng.lat, lng: e.latlng.lng });
-        },
-      });
-
-      useEffect(() => {
-        mapRef.current = mapInstance ?? null;
-        return () => {
-          if (mapRef.current === mapInstance) mapRef.current = null;
-        };
-      }, [mapInstance]);
-
-      return null;
-    };
-
-    return (
-      <MapContainer key={mk} center={center} zoom={zoom} style={{ width: '100%', height: '100%' }}>
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        <MapClickLocal setCoords={setCoords} />
-        {marker ? <RLMarker position={marker as [number, number]} /> : null}
-      </MapContainer>
-    );
-  };
+  /* UI render */
 
   return (
     <main className="min-h-screen bg-[#0f172a] text-white p-6">
@@ -493,7 +509,9 @@ export default function AdminPostForm() {
                     <td className="p-2">{item.phone ?? '—'}</td>
                     <td className="p-2 text-xs">
                       {item.country ?? '—'} / {item.province ?? '—'} / {item.city ?? '—'}
-                      <div className="mt-1 text-xxs">{item.location_lat != null && item.location_lng != null ? `lat ${item.location_lat}, lng ${item.location_lng} `: 'بدون إحداثيات'}</div>
+                      <div className="mt-1 text-xxs">
+                        {item.location_lat != null && item.location_lng != null ? `lat ${item.location_lat}, lng ${item.location_lng} `: 'بدون إحداثيات'}
+                      </div>
                     </td>
                     <td className="p-2 text-xs">{item.payment_code ?? '—'} / {item.payment_id ?? '—'}</td>
                     <td className="p-2">{item.approved === true ? '✅' : item.approved === false ? '❌' : '⏳'}</td>
@@ -639,53 +657,55 @@ export default function AdminPostForm() {
               />
             </div>
 
-            <input
-              value={String(editData.address ?? '')}
-              onChange={(e) => setEditData({ ...editData, address: e.target.value })}
-              className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
-              placeholder="العنوان"
-            />
-            <input
-              value={String(editData.phone ?? '')}
-              onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-              className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
-              placeholder="رقم الهاتف"
-            />
-            <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <input
-                type="number"
-                value={editData.location_lat === null || editData.location_lat === undefined || editData.location_lat === '' ? '' : String(editData.location_lat)}
-                onChange={(e) =>
-                  setEditData({
-                    ...editData,
-                    location_lat: e.target.value === '' ? '' : parseFloat(e.target.value),
-                  })
-                }
+                value={String(editData.address ?? '')}
+                onChange={(e) => setEditData({ ...editData, address: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
-                placeholder="Latitude"
+                placeholder="العنوان"
               />
               <input
-                type="number"
-                value={editData.location_lng === null || editData.location_lng === undefined || editData.location_lng === '' ? '' : String(editData.location_lng)}
-                onChange={(e) =>
-                  setEditData({
-                    ...editData,
-                    location_lng: e.target.value === '' ? '' : parseFloat(e.target.value),
-                  })
-                }
+                value={String(editData.phone ?? '')}
+                onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
                 className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
-                placeholder="Longitude"
+                placeholder="رقم الهاتف"
               />
-            </div>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <input
+                  type="number"
+                  value={editData.location_lat === null || editData.location_lat === undefined || editData.location_lat === '' ? '' : String(editData.location_lat)}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      location_lat: e.target.value === '' ? '' : parseFloat(e.target.value),
+                    })
+                  }
+                  className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
+                  placeholder="Latitude"
+                />
+                <input
+                  type="number"
+                  value={editData.location_lng === null || editData.location_lng === undefined || editData.location_lng === '' ? '' : String(editData.location_lng)}
+                  onChange={(e) =>
+                    setEditData({
+                      ...editData,
+                      location_lng: e.target.value === '' ? '' : parseFloat(e.target.value),
+                    })
+                  }
+                  className="w-full p-2 bg-gray-800 border border-cyan-500 rounded"
+                  placeholder="Longitude"
+                />
+              </div>
 
-            <label className="flex items-center gap-2 text-sm mt-3">
-              <input
-                type="checkbox"
-                checked={!!editData.is_company}
-                onChange={(e) => setEditData({ ...editData, is_company: e.target.checked })}
-              />
-              شركة؟
-            </label>
+              <label className="flex items-center gap-2 text-sm mt-3">
+                <input
+                  type="checkbox"
+                  checked={!!editData.is_company}
+                  onChange={(e) => setEditData({ ...editData, is_company: e.target.checked })}
+                />
+                شركة؟
+              </label>
+            </div>
 
             <textarea
               value={String(editData.description ?? '')}
