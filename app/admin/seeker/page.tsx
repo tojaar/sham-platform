@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { supabase } from '@/lib/supabase';
 import 'leaflet/dist/leaflet.css';
 import type { PostgrestResponse } from '@supabase/supabase-js';
 
@@ -10,6 +9,15 @@ const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContai
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
+
+/**
+ * Import Supabase dynamically at runtime (client-only) to avoid creating the client during SSR/prerender.
+ * This prevents the "supabaseKey is required" error during Next.js prerender/build.
+ */
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
 
 type Seeker = {
   id: string;
@@ -55,14 +63,30 @@ export default function AdminSeekerForm() {
   useEffect(() => {
     fetchRows();
     return () => { document.body.style.overflow = ''; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // dependencies intentionally include all UI filters/pagination
   }, [query, filterStatus, sortBy, sortDir, page, pageSize]);
+
+  // --- Helpers ---
+  function parseLocation(loc?: string | null) {
+    if (!loc) return null;
+    const parts = String(loc).split(',').map(s => s.trim());
+    if (parts.length !== 2) return null;
+    const lat = Number(parts[0]);
+    const lng = Number(parts[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  }
+
+  function setBusy(id: string, v: boolean) {
+    setBusyIds(prev => ({ ...prev, [id]: v }));
+  }
 
   // --- Fetch rows with correct query building and normalization ---
   async function fetchRows() {
     setLoading(true);
     setError(null);
     try {
+      const supabase = await getSupabase();
       const offset = page * pageSize;
 
       let qb = supabase
@@ -75,6 +99,7 @@ export default function AdminSeekerForm() {
 
       if (query && query.trim()) {
         const q = query.trim();
+        // use .or with a single string argument
         qb = qb.or(`name.ilike.%${q}%,phone.ilike.%${q}%,payment_code.ilike.%${q}%,transaction_id.ilike.%${q}%`);
       }
 
@@ -110,21 +135,6 @@ export default function AdminSeekerForm() {
     }
   }
 
-  // --- Helpers ---
-  function parseLocation(loc?: string | null) {
-    if (!loc) return null;
-    const parts = String(loc).split(',').map(s => s.trim());
-    if (parts.length !== 2) return null;
-    const lat = Number(parts[0]);
-    const lng = Number(parts[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
-  }
-
-  function setBusy(id: string, v: boolean) {
-    setBusyIds(prev => ({ ...prev, [id]: v }));
-  }
-
   // --- Single row operations (robust update with rollback) ---
   async function updateStatus(row: Seeker, status: 'approved' | 'rejected' | 'pending') {
     setError(null);
@@ -140,6 +150,7 @@ export default function AdminSeekerForm() {
     if (selected && selected.id === row.id) setSelected({ ...selected, status, approved: approvedValue });
 
     try {
+      const supabase = await getSupabase();
       const payload: Partial<Seeker> = { status, approved: approvedValue };
       const res = await supabase
         .from('seeker_requests')
@@ -175,6 +186,7 @@ export default function AdminSeekerForm() {
     if (busyIds[row.id]) return;
     setBusy(row.id, true);
     try {
+      const supabase = await getSupabase();
       const res = await supabase.from('seeker_requests').delete().eq('id', row.id);
       const { error } = res as { error?: Error | null };
       if (error) throw error;
@@ -196,6 +208,7 @@ export default function AdminSeekerForm() {
     if (!edited.id) return setError('السجل غير صالح');
     setBusy(edited.id, true);
     try {
+      const supabase = await getSupabase();
       const payload: Partial<Seeker> = {
         name: edited.name ?? null,
         phone: edited.phone ?? null,
@@ -247,6 +260,7 @@ export default function AdminSeekerForm() {
     setLoading(true);
     setError(null);
     try {
+      const supabase = await getSupabase();
       const payload: Partial<Seeker> = { status: 'approved', approved: true };
       const res = await supabase.from('seeker_requests').update(payload).in('id', ids);
       const { error } = res as { error?: Error | null };
@@ -269,6 +283,7 @@ export default function AdminSeekerForm() {
     setLoading(true);
     setError(null);
     try {
+      const supabase = await getSupabase();
       const payload: Partial<Seeker> = { status: 'rejected', approved: false };
       const res = await supabase.from('seeker_requests').update(payload).in('id', ids);
       const { error } = res as { error?: Error | null };
