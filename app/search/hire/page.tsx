@@ -66,13 +66,16 @@ export default function SearchHirePage() {
     if (typeof window === 'undefined') return;
     (async () => {
       try {
-        const L = await import('leaflet');
+        // Import leaflet and assert its module type to avoid using any
+        const L = (await import('leaflet')) as typeof import('leaflet');
+
         try {
-          if (L && (L as any).Icon && (L as any).Icon.Default && (L as any).Icon.Default.prototype) {
+          if (L && L.Icon && L.Icon.Default && L.Icon.Default.prototype) {
+            // delete property safely if exists
             try {
-              Reflect.deleteProperty((L as any).Icon.Default.prototype, '_getIconUrl');
+              Reflect.deleteProperty(L.Icon.Default.prototype as object, '_getIconUrl');
             } catch {}
-            (L as any).Icon.Default.mergeOptions?.({
+            L.Icon.Default.mergeOptions?.({
               iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
               iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
               shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
