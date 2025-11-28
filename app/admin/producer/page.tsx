@@ -1,7 +1,22 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
+import type { MapContainerProps, TileLayerProps, MarkerProps } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+
+/**
+ * ملاحظة مهمة حول Supabase:
+ * لا نستورد العميل مباشرة عند مستوى الوحدة لتجنب إنشاء العميل أثناء SSR/prerender.
+ * بدلاً من ذلك نستخدم استيرادًا ديناميكياً داخل الدوال التي تعمل على جهة العميل فقط.
+ */
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
+
+/* ---------- Types ---------- */
 
 type Member = {
   id: string;
@@ -16,11 +31,14 @@ type Member = {
   invite_code?: string | null;
   referrer_id?: string | null;
   referrer_code?: string | null;
+  invitecodeself?: number | null;
   invite_code_self?: number | null;
   status?: string | null; // pending | approved | rejected
   created_at?: string | null;
   usdt_trc20?: string | null;
+  shamcashlink?: string | null;
   sham_cash_link?: string | null;
+  shampaymentcode?: string | null;
   sham_payment_code?: string | null;
   usdt_txid?: string | null;
   [key: string]: unknown;
@@ -41,47 +59,158 @@ function toStringSafe(v: unknown): string {
   }
 }
 
-/* ---------- Component ---------- */
+/* ---------- CSV helper ---------- */
+
+const toCSV = (rows: Array<Record<string, unknown>>): string => {
+  if (!rows || rows.length === 0) return '';
+  const keys = Object.keys(rows[0]);
+  const header = keys.join(',');
+  const body = rows
+    .map((r) =>
+      keys
+        .map((k) => {
+          const v = r[k] ?? '';
+          const cell = typeof v === 'string' ? v.replace(/"/g, '""') : String(v ?? '');
+          return "${cell}";
+        })
+        .join(',')
+    )
+    .join('\n');
+  return `${header}\n${body};`
+};
+
+/* ---------- Component: ClientMap (dynamic react-leaflet loader) ---------- */
+
+const ClientMap: React.FC<{
+  center: [number, number];
+  zoom: number;
+  marker?: [number, number] | null;
+  setCoords: (c: { lat: number; lng: number }) => void;
+  mapKey: number;
+}> = ({ center, zoom, marker, setCoords, mapKey: mk }) => {
+  type RLModule = {
+    MapContainer: React.ComponentType<MapContainerProps>;
+    TileLayer: React.ComponentType<TileLayerProps>;
+    Marker: React.ComponentType<MarkerProps>;
+    useMapEvents: (handlers: { click?: (e: LeafletMouseEvent) => void }) => LeafletMap | null;
+  };
+
+  const [componentsLoaded, setComponentsLoaded] = useState<RLModule | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    if (typeof window === 'undefined') return;
+    (async () => {
+      try {
+        const mod = (await import('react-leaflet')) as unknown as RLModule;
+        if (!mounted) return;
+        setComponentsLoaded(mod);
+      } catch (err) {
+        console.warn('Failed to load react-leaflet dynamically', err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (!componentsLoaded) return null;
+
+  const { MapContainer, TileLayer, Marker: RLMarker, useMapEvents } = componentsLoaded;
+
+  const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords: sc }) => {
+    const mapInstance = useMapEvents({
+      click(e: LeafletMouseEvent) {
+        sc({ lat: e.latlng.lat, lng: e.latlng.lng });
+      },
+    });
+
+    useEffect(() => {
+      // no-op: map instance captured by useMapEvents; kept for parity with original design
+      return () => {};
+    }, [mapInstance]);
+
+    return null;
+  };
+
+  return (
+    <MapContainer key={mk} center={center} zoom={zoom} style={{ width: '100%', height: '100%' }}>
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <MapClickLocal setCoords={setCoords} />
+      {marker ? <RLMarker position={marker as [number, number]} /> : null}
+    </MapContainer>
+  );
+};
+
+/* ---------- Main Component ---------- */
 
 export default function AdminProducerForm() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // UI state
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [countryFilter, setCountryFilter] = useState<string | null>(null);
   const [referrerFilter, setReferrerFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [sortBy, setSortBy] = useState<{ key: keyof Member | 'created_at'; dir: 'asc' | 'desc' }>({ key: 'created_at', dir: 'desc' });
+  const [sortBy, setSortBy] = useState<{ key: keyof Member | 'createdat'; dir: 'asc' | 'desc' }>({ key: 'createdat', dir: 'desc' });
 
   // keep reference to setSortBy so linter doesn't warn about unused variable (no behavioral change)
   useEffect(() => {
     void setSortBy;
   }, [setSortBy]);
 
-  // Pagination
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState<number>(1);
   const pageSize = 20;
 
-  // Edit / detail modal state
   const [editing, setEditing] = useState<Member | null>(null);
   const [detail, setDetail] = useState<Member | null>(null);
-  const [savingEdit, setSavingEdit] = useState(false);
+  const [savingEdit, setSavingEdit] = useState<boolean>(false);
 
-  // Fetch members from supabase
-  const fetchMembers = async (): Promise<void> => {
+  /* Load Leaflet icons (client-only) */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    (async () => {
+      try {
+        const L = await import('leaflet');
+        try {
+          (L.Icon.Default as unknown as { mergeOptions: (o: Record<string, string>) => void }).mergeOptions({
+            iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+            iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+            shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+          });
+        } catch {
+          // ignore merge failure
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  /* Fetch members from supabase (client-side) */
+  const fetchMembers = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase
         .from('producer_members')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setMembers((Array.isArray(data) ? data : []) as Member[]);
+      // normalize some alternate field names to keep UI consistent without changing behavior
+      const normalized = (Array.isArray(data) ? data : []).map((r: Record<string, unknown>) => {
+        return {
+          ...r,
+          invite_code_self: r.invite_code_self ?? r.invitecodeself ?? null,
+          sham_cash_link: r.sham_cash_link ?? r.shamcashlink ?? null,
+          sham_payment_code: r.sham_payment_code ?? r.shampaymentcode ?? null,
+        } as Member;
+      });
+      setMembers(normalized as Member[]);
     } catch (err: unknown) {
       console.error('fetchMembers error', err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -89,50 +218,46 @@ export default function AdminProducerForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchMembers();
 
     // Optional realtime subscription; keep if you want live updates
-    const channel = supabase
-      .channel('public:producer_members')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'producer_members' }, () => {
-        fetchMembers();
-      })
-      .subscribe();
-
-    return () => {
+    (async () => {
       try {
-        channel.unsubscribe();
+        const supabase = await getSupabase();
+        const channel = supabase
+          .channel('public:producer_members')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'producer_members' }, () => {
+            fetchMembers();
+          })
+          .subscribe();
+
+        // cleanup
+        return () => {
+          try {
+            channel.unsubscribe();
+          } catch {
+            // ignore unsubscribe errors
+          }
+        };
       } catch {
-        // ignore unsubscribe errors
+        // ignore realtime setup errors
       }
-    };
+    })();
+
     // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchMembers]);
 
-  // unique lists for filters
-  const uniqueCountries = useMemo(() => {
-    const setC = new Set<string>();
-    members.forEach(m => {
-      if (m.country) setC.add(m.country);
-    });
-    return Array.from(setC).sort();
-  }, [members]);
+  const refresh = useCallback(async () => {
+    await fetchMembers();
+    setPage(1);
+  }, [fetchMembers]);
 
-  const uniqueReferrers = useMemo(() => {
-    const map = new Map<string, string>();
-    members.forEach(m => {
-      if (m.id && m.invite_code) {
-        map.set(m.id, `${m.full_name ?? '(no-name)'} — ${m.invite_code}`);
-      }
-    });
-    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
-  }, [members]);
+  /* Filters, pagination, export */
 
-  // filtered + search + sort
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let result = members.slice();
@@ -166,17 +291,57 @@ export default function AdminProducerForm() {
   }, [members, query, statusFilter, countryFilter, referrerFilter, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  // ensure page is within bounds when totalPages changes
   useEffect(() => {
     setPage(p => Math.min(p, totalPages));
   }, [totalPages]);
 
   const pageData = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page]);
 
-  // actions
-  const updateStatus = async (id: string, status: 'approved' | 'rejected' | 'pending'): Promise<void> => {
+  const categories = useMemo(() => {
+    const s = new Set<string>();
+    members.forEach((p) => {
+      if ((p as any).category) s.add((p as any).category);
+    });
+    return ['all', ...Array.from(s)];
+  }, [members]);
+
+  const exportCSV = useCallback((rows: Member[]) => {
+    const csv = toCSV(rows.map(r => {
+      // map to stable keys for CSV
+      return {
+        id: r.id ?? '',
+        name: r.full_name ?? '',
+        email: r.email ?? '',
+        whatsapp: r.whatsapp ?? '',
+        country: r.country ?? '',
+        province: r.province ?? '',
+        city: r.city ?? '',
+        invite_code: r.invite_code ?? '',
+        referrer_code: r.referrer_code ?? '',
+        generation: r.invite_code_self ?? r.invitecodeself ?? '',
+        status: r.status ?? '',
+        created_at: r.created_at ?? '',
+      } as Record<string, unknown>;
+    }));
+    if (!csv) {
+      setError('لا توجد بيانات للتصدير');
+      return;
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `producer_members_export_${new Date().toISOString()}.csv;`
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  /* Actions */
+
+  const updateStatus = useCallback(async (id: string, status: 'approved' | 'rejected' | 'pending') => {
     try {
       setLoading(true);
+      const supabase = await getSupabase();
       const { error } = await supabase.from('producer_members').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
       await fetchMembers();
@@ -187,12 +352,13 @@ export default function AdminProducerForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchMembers]);
 
-  const deleteMember = async (id: string): Promise<void> => {
+  const deleteMember = useCallback(async (id: string) => {
     if (!confirm('هل متأكد من حذف هذا العضو نهائياً؟')) return;
     try {
       setLoading(true);
+      const supabase = await getSupabase();
       const { error } = await supabase.from('producer_members').delete().eq('id', id);
       if (error) throw error;
       await fetchMembers();
@@ -203,12 +369,13 @@ export default function AdminProducerForm() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchMembers]);
 
-  const saveEdit = async (m: Member | null): Promise<void> => {
+  const saveEdit = useCallback(async (m: Member | null) => {
     if (!m) return;
     setSavingEdit(true);
     try {
+      const supabase = await getSupabase();
       const patch: Record<string, unknown> = { ...m, updated_at: new Date().toISOString() };
       delete patch.id;
       const { error } = await supabase.from('producer_members').update(patch).eq('id', m.id);
@@ -222,53 +389,9 @@ export default function AdminProducerForm() {
     } finally {
       setSavingEdit(false);
     }
-  };
+  }, [fetchMembers]);
 
-  // Export CSV (simple client-side exporter; works without papaparse)
-  const exportCSV = (rows: Member[]) => {
-    if (!rows || rows.length === 0) {
-      alert('لا توجد بيانات للتصدير');
-      return;
-    }
-    const columns = ['id', 'name', 'email', 'whatsapp', 'country', 'province', 'city', 'invite_code', 'referrer_code', 'generation', 'status', 'created_at'];
-    const header = columns.join(',');
-    const lines = rows.map(r => {
-      const map: Record<string, unknown> = {
-        id: r.id ?? '',
-        name: r.full_name ?? '',
-        email: r.email ?? '',
-        whatsapp: r.whatsapp ?? '',
-        country: r.country ?? '',
-        province: r.province ?? '',
-        city: r.city ?? '',
-        invite_code: r.invite_code ?? '',
-        referrer_code: r.referrer_code ?? '',
-        generation: r.invite_code_self ?? '',
-        status: r.status ?? '',
-        created_at: r.created_at ?? '',
-      };
-      return columns.map(col => {
-        const raw = map[col] ?? '';
-        const v = toStringSafe(raw);
-        const escaped = v.replace(/"/g, '""');
-        if (escaped.includes(',') || escaped.includes('\n') || escaped.includes('\r') || escaped.includes('"')) {
-          return "${escaped}";
-        }
-        return escaped;
-      }).join(',');
-    });
-
-    const csvContent = [header, ...lines].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `producer_members_export_${new Date().toISOString()}.csv;`
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // build 2-level hierarchy inline inside useMemo to avoid missing-deps warning
+  // build 2-level hierarchy
   const hierarchy = useMemo(() => {
     const byId = new Map<string, Member>();
     members.forEach(m => { if (m.id) byId.set(m.id, m); });
@@ -295,9 +418,9 @@ export default function AdminProducerForm() {
   }, [members]);
 
   // Trigger password-reset request (server endpoint)
-  const requestPasswordReset = async (email?: string) => {
+  const requestPasswordReset = useCallback(async (email?: string) => {
     if (!email) { alert('لا يوجد بريد لإرسال رابط إعادة تعيين كلمة السر.'); return; }
-    if (!confirm(`ل رابط إعادة تعيين كلمة السر إلى ${email}?`)) return;
+    if (!confirm(`هل تريد إرسال رابط إعادة تعيين كلمة السر إلى ${email}?`)) return;
     try {
       setLoading(true);
       const res = await fetch('/api/admin/send-reset', {
@@ -317,13 +440,12 @@ export default function AdminProducerForm() {
     } finally {
       setLoading(false);
     }
-  };
-  // keep a silent reference so linter doesn't warn about "assigned but never used"
-  void requestPasswordReset;
+  }, []);
 
-  /* ---------- Render ---------- */
+  /* ---------- Render (UI) ---------- */
+
   return (
-    <main className="min-h-screen bg-[#07121a] text-slate-100 p-6">
+    <main className="min-h-screen bg-[#07121a] text-white p-6">
       <div className="max-w-full mx-auto">
         <header className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -333,42 +455,42 @@ export default function AdminProducerForm() {
 
           <div className="flex gap-2 items-center">
             <div className="flex items-center gap-2 bg-[#021018] p-2 rounded">
-              <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="ابحث بأي حقل..." className="px-3 py-2 rounded bg-[#07171b] border border-white/6 text-slate-200 w-72" />
-              <button onClick={() => { setQuery(''); setPage(1); }} className="px-3 py-2 bg-[#0b2a2a] rounded text-slate-200">مسح</button>
+              <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="ابحث بأي حقل..." className="px-3 py-2 rounded bg-[#07171b] border border-white/6 text-white w-72" />
+              <button onClick={() => { setQuery(''); setPage(1); }} className="px-3 py-2 bg-[#0b2a2a] rounded text-white">مسح</button>
             </div>
 
             <div className="flex items-center gap-2">
-              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as 'all' | 'pending' | 'approved' | 'rejected'); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-slate-200">
+              <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as 'all' | 'pending' | 'approved' | 'rejected'); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-white">
                 <option value="all">كل الحالات</option>
                 <option value="pending">قيد المراجعة</option>
                 <option value="approved">مقبول</option>
                 <option value="rejected">مرفوض</option>
               </select>
 
-              <select value={countryFilter ?? ''} onChange={(e) => { setCountryFilter(e.target.value || null); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-slate-200">
+              <select value={countryFilter ?? ''} onChange={(e) => { setCountryFilter(e.target.value || null); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-white">
                 <option value="">كل الدول</option>
-                {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
+                {Array.from(new Set(members.map(m => m.country).filter(Boolean) as string[])).sort().map(c => <option key={c} value={c}>{c}</option>)}
               </select>
 
-              <select value={referrerFilter ?? ''} onChange={(e) => { setReferrerFilter(e.target.value || null); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-slate-200">
+              <select value={referrerFilter ?? ''} onChange={(e) => { setReferrerFilter(e.target.value || null); setPage(1); }} className="px-3 py-2 border rounded bg-[#021018] text-white">
                 <option value="">كل الداعين</option>
-                {uniqueReferrers.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                {Array.from(new Map(members.filter(m => m.id && m.invite_code).map(m => [m.id!, `${m.full_name ?? '(no-name)'} — ${m.invite_code}`]))).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
               </select>
 
-              <div className="flex items-center gap-1 border rounded bg-[#021018] px-2 text-slate-200">
+              <div className="flex items-center gap-1 border rounded bg-[#021018] px-2 text-white">
                 <button onClick={() => setViewMode('table')} className={`px-2 py-1 ${viewMode === 'table' ? 'bg-[#08333b] rounded' : ''}`}>جدول</button>
                 <button onClick={() => setViewMode('cards')} className={`px-2 py-1 ${viewMode === 'cards' ? 'bg-[#08333b] rounded' : ''}`}>بطاقات</button>
                 <button onClick={() => setViewMode('hierarchy')} className={`px-2 py-1 ${viewMode === 'hierarchy' ? 'bg-[#08333b] rounded' : ''}`}>هرمي</button>
               </div>
 
               <button onClick={() => exportCSV(filtered)} className="px-3 py-2 bg-cyan-600 text-white rounded">تصدير CSV</button>
-              <button onClick={() => fetchMembers()} className="px-3 py-2 bg-[#021018] border rounded text-slate-200">تحديث</button>
+              <button onClick={() => fetchMembers()} className="px-3 py-2 bg-[#021018] border rounded text-white">تحديث</button>
             </div>
           </div>
         </header>
 
         <section className="bg-[#041018] rounded shadow p-4">
-          {loading && <div className="text-sm text-slate-300 mb-2">جارٍ التحميل...</div>}
+          {loading && <div className="text-sm text-white mb-2">جارٍ التحميل...</div>}
           {error && <div className="text-sm text-red-400 mb-2">{error}</div>}
 
           {viewMode === 'table' && (
@@ -393,15 +515,23 @@ export default function AdminProducerForm() {
                   {pageData.map((m, idx) => (
                     <tr key={m.id} className="border-t border-[#082226]">
                       <td className="px-3 py-2 align-top">{(page - 1) * pageSize + idx + 1}</td>
-                      <td className="px-3 py-2 align-top font-medium">{m.full_name}</td>
-                      <td className="px-3 py-2 align-top">{m.email}</td>
-                      <td className="px-3 py-2 align-top">{m.whatsapp}</td>
-                      <td className="px-3 py-2 align-top">{m.country}</td>
-                      <td className="px-3 py-2 align-top"><code className="bg-[#021a1a] px-2 py-1 rounded text-xs">{m.invite_code}</code></td>
+                      <td className="px-3 py-2 align-top font-medium">{m.full_name ?? '—'}</td>
+                      <td className="px-3 py-2 align-top">{m.email ?? '—'}</td>
+                      <td className="px-3 py-2 align-top">{m.whatsapp ?? '—'}</td>
+                      <td className="px-3 py-2 align-top">{m.country ?? '—'}</td>
+                      <td className="px-3 py-2 align-top"><code className="bg-[#021a1a] px-2 py-1 rounded text-xs">{m.invite_code ?? '—'}</code></td>
                       <td className="px-3 py-2 align-top">{m.referrer_code ?? '-'}</td>
-                      <td className="px-3 py-2 align-top">{m.invite_code_self ?? '-'}</td>
+                      <td className="px-3 py-2 align-top">{m.invite_code_self ?? m.invitecodeself ?? '-'}</td>
                       <td className="px-3 py-2 align-top">
-                        <span className={`px-2 py-1 rounded text-xs ${m.status === 'approved' ? 'bg-green-800/20 text-green-300' : m.status === 'rejected' ? 'bg-red-800/20 text-red-300' : 'bg-yellow-800/20 text-yellow-300'}`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${
+                            m.status === 'approved'
+                              ? 'bg-green-800/20 text-green-300'
+                              : m.status === 'rejected'
+                              ? 'bg-red-800/20 text-red-300'
+                              : 'bg-yellow-800/20 text-yellow-300'
+                          }`}
+                        >
                           {m.status ?? 'pending'}
                         </span>
                       </td>
@@ -437,17 +567,17 @@ export default function AdminProducerForm() {
                 <div key={m.id} className="bg-[#021617] border rounded p-4 shadow">
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="font-semibold text-white">{m.full_name}</div>
-                      <div className="text-xs text-slate-300">{m.email}</div>
-                      <div className="text-xs text-slate-300">{m.whatsapp}</div>
+                      <div className="font-semibold text-white">{m.full_name ?? '—'}</div>
+                      <div className="text-xs text-slate-300">{m.email ?? '—'}</div>
+                      <div className="text-xs text-slate-300">{m.whatsapp ?? '—'}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xs text-slate-400">#{m.invite_code}</div>
-                      <div className="text-xs text-slate-400">{m.country}</div>
+                      <div className="text-xs text-slate-400">#{m.invite_code ?? '-'}</div>
+                      <div className="text-xs text-slate-400">{m.country ?? '-'}</div>
                     </div>
                   </div>
 
-                  <div className="mt-3 text-sm text-slate-300">{m.address}</div>
+                  <div className="mt-3 text-sm text-slate-300">{m.address ?? ''}</div>
 
                   <div className="mt-4 flex items-center gap-2">
                     {m.status !== 'approved' && <button onClick={() => updateStatus(m.id!, 'approved')} className="px-3 py-1 rounded bg-emerald-600 text-white text-sm">قبول</button>}
@@ -468,8 +598,8 @@ export default function AdminProducerForm() {
                 <div key={root.member.id} className="bg-[#021617] p-4 border rounded shadow">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-white">{root.member.full_name} <span className="text-xs text-slate-400 ml-2">({root.member.invite_code})</span></div>
-                      <div className="text-sm text-slate-300">{root.member.country}</div>
+                      <div className="font-semibold text-white">{root.member.full_name ?? '—'} <span className="text-xs text-slate-400 ml-2">({root.member.invite_code ?? '-'})</span></div>
+                      <div className="text-sm text-slate-300">{root.member.country ?? '-'}</div>
                     </div>
                     <div className="text-sm text-slate-300">Direct: {root.direct.length} • Indirect: {Array.from(root.indirectMap.values()).reduce((s, arr) => s + arr.length, 0)}</div>
                   </div>
@@ -479,16 +609,16 @@ export default function AdminProducerForm() {
                       <div key={d.id} className="border rounded p-3 bg-[#071e1a]">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-medium text-white">{d.full_name} <span className="text-xs text-slate-400">({d.invite_code})</span></div>
-                            <div className="text-xs text-slate-300">{d.country}</div>
+                            <div className="font-medium text-white">{d.full_name ?? '—'} <span className="text-xs text-slate-400">({d.invite_code ?? '-'})</span></div>
+                            <div className="text-xs text-slate-300">{d.country ?? '-'}</div>
                           </div>
-                          <div className="text-xs text-slate-300">Gen {d.invite_code_self}</div>
+                          <div className="text-xs text-slate-300">Gen {d.invite_code_self ?? d.invitecodeself ?? '-'}</div>
                         </div>
 
                         <div className="mt-2 text-sm text-slate-300">Recruits:
                           <ul className="mt-2 list-disc pl-5 text-sm text-slate-300">
                             {(root.indirectMap.get(d.id) ?? []).map(ii => (
-                              <li key={ii.id}>{ii.full_name} — {ii.country} <span className="text-xs text-slate-400">({ii.invite_code})</span></li>
+                              <li key={ii.id}>{ii.full_name ?? '—'} — {ii.country ?? '-'} <span className="text-xs text-slate-400">({ii.invite_code ?? '-'})</span></li>
                             ))}
                           </ul>
                         </div>
@@ -499,6 +629,15 @@ export default function AdminProducerForm() {
               ))}
             </div>
           )}
+
+        </section>
+
+        <section className="mt-6 flex items-center justify-between">
+          <div className="text-sm text-gray-400">الصفحة {page} من {totalPages}</div>
+          <div className="flex gap-2">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-2 bg-gray-800 rounded">السابق</button>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} className="px-3 py-2 bg-gray-800 rounded">التالي</button>
+          </div>
         </section>
 
         {/* Detail modal */}
@@ -509,22 +648,22 @@ export default function AdminProducerForm() {
               <h2 className="text-xl font-bold mb-2">تفاصيل الطلب</h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div><div className="text-xs text-slate-300">الاسم</div><div className="font-medium">{detail.full_name}</div></div>
-                <div><div className="text-xs text-slate-300">البريد</div><div className="font-medium">{detail.email}</div></div>
-                <div><div className="text-xs text-slate-300">واتساب</div><div className="font-medium">{detail.whatsapp}</div></div>
-                <div><div className="text-xs text-slate-300">الدولة</div><div className="font-medium">{detail.country}</div></div>
-                <div><div className="text-xs text-slate-300">المحافظة</div><div className="font-medium">{detail.province}</div></div>
-                <div><div className="text-xs text-slate-300">المدينة</div><div className="font-medium">{detail.city}</div></div>
-                <div className="md:col-span-2"><div className="text-xs text-slate-300">العنوان</div><div className="font-medium">{detail.address}</div></div>
+                <div><div className="text-xs text-slate-300">الاسم</div><div className="font-medium">{detail.full_name ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">البريد</div><div className="font-medium">{detail.email ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">واتساب</div><div className="font-medium">{detail.whatsapp ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">الدولة</div><div className="font-medium">{detail.country ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">المحافظة</div><div className="font-medium">{detail.province ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">المدينة</div><div className="font-medium">{detail.city ?? '-'}</div></div>
+                <div className="md:col-span-2"><div className="text-xs text-slate-300">العنوان</div><div className="font-medium">{detail.address ?? '-'}</div></div>
 
                 <div><div className="text-xs text-slate-300">USDT TRC20</div><div className="font-medium">{detail.usdt_trc20 ?? '-'}</div></div>
-                <div><div className="text-xs text-slate-300">شام كاش رابط</div><div className="font-medium">{detail.sham_cash_link ?? '-'}</div></div>
-                <div><div className="text-xs text-slate-300">رمز شام كاش</div><div className="font-medium">{detail.sham_payment_code ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">شام كاش رابط</div><div className="font-medium">{detail.sham_cash_link ?? detail.shamcashlink ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">رمز شام كاش</div><div className="font-medium">{detail.sham_payment_code ?? detail.shampaymentcode ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">TXID</div><div className="font-medium">{detail.usdt_txid ?? '-'}</div></div>
 
                 <div><div className="text-xs text-slate-300">كود الدعوة</div><div className="font-medium">{detail.invite_code ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">داعي (كود)</div><div className="font-medium">{detail.referrer_code ?? '-'}</div></div>
-                <div><div className="text-xs text-slate-300">رمز الدعوة الخاص</div><div className="font-medium">{detail.invite_code_self ?? '-'}</div></div>
+                <div><div className="text-xs text-slate-300">رمز الدعوة الخاص</div><div className="font-medium">{detail.invite_code_self ?? detail.invitecodeself ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">الحالة</div><div className="font-medium">{detail.status ?? 'pending'}</div></div>
                 <div><div className="text-xs text-slate-300">معرف المستخدم</div><div className="font-medium">{detail.user_id ?? '-'}</div></div>
                 <div><div className="text-xs text-slate-300">تاريخ الإنشاء</div><div className="font-medium">{detail.created_at ? new Date(detail.created_at).toLocaleString() : '-'}</div></div>
@@ -561,8 +700,8 @@ export default function AdminProducerForm() {
 
                 <textarea value={editing.address ?? ''} onChange={(e) => setEditing({ ...editing, address: e.target.value })} className="col-span-1 md:col-span-2 px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
                 <input value={editing.usdt_trc20 ?? ''} onChange={(e) => setEditing({ ...editing, usdt_trc20: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.sham_cash_link ?? ''} onChange={(e) => setEditing({ ...editing, sham_cash_link: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
-                <input value={editing.sham_payment_code ?? ''} onChange={(e) => setEditing({ ...editing, sham_payment_code: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.sham_cash_link ?? editing.shamcashlink ?? ''} onChange={(e) => setEditing({ ...editing, sham_cash_link: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
+                <input value={editing.sham_payment_code ?? editing.shampaymentcode ?? ''} onChange={(e) => setEditing({ ...editing, sham_payment_code: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
                 <input value={editing.usdt_txid ?? ''} onChange={(e) => setEditing({ ...editing, usdt_txid: e.target.value })} className="px-3 py-2 bg-[#021617] border border-white/6 rounded text-slate-100" />
               </div>
 
