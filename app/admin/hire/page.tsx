@@ -2,8 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { supabase } from '@/lib/supabase';
 import 'leaflet/dist/leaflet.css';
+
+// منع إنشاء عميل Supabase أثناء SSR: استيراد كسول آمن للمتصفح فقط
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
 
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
@@ -165,6 +170,7 @@ export default function AdminHirePage() {
     setLoading(true);
     setMessage(null);
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase
         .from('hire_requests')
         .select('*')
@@ -186,6 +192,7 @@ export default function AdminHirePage() {
   };
 
   useEffect(() => {
+    // تشغيل الجلب على المتصفح فقط
     fetchHires();
     // intentionally stable dependency array
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,6 +203,8 @@ export default function AdminHirePage() {
     setMessage(null);
     try {
       setLoading(true);
+      const supabase = await getSupabase();
+
       if (action === 'delete') {
         if (!confirm('هل أنت متأكد أنك تريد حذف هذا السجل؟')) {
           setLoading(false);
@@ -236,6 +245,7 @@ export default function AdminHirePage() {
       Object.keys(payload).forEach((k) => {
         if (payload[k] === '') payload[k] = null;
       });
+      const supabase = await getSupabase();
       const { error } = await supabase.from('hire_requests').update(payload).eq('id', editId);
       if (error) throw error;
       setMessage('تم حفظ التعديلات');
