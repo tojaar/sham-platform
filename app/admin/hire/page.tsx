@@ -77,7 +77,7 @@ function extractLatLng(obj: unknown): { lat: number; lng: number } | null {
     }
   }
 
-  // try common keys
+  // try common keys again explicitly
   const lat = toNumberSafe(o['lat']);
   const lng = toNumberSafe(o['lng']);
   if (lat !== null && lng !== null) return { lat, lng };
@@ -126,11 +126,12 @@ export default function AdminHirePage() {
       raw.mapLocation ??
       null;
 
+    const locationObj = extractLatLng(locationRaw);
     const locationStr =
       typeof locationRaw === 'string'
         ? locationRaw
-        : extractLatLng(locationRaw)
-        ? `${extractLatLng(locationRaw)!.lat},${extractLatLng(locationRaw)!.lng}`
+        : locationObj
+        ? `${locationObj.lat},${locationObj.lng}`
         : null;
 
     const salaryVal = toNumberSafe(raw.salary) ?? toNumberSafe(raw.age) ?? null;
@@ -485,7 +486,6 @@ export default function AdminHirePage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setEditId(null)} />
           <div className="relative bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-3xl text-white overflow-auto max-h-[90vh]">
             <h2 className="text-xl font-bold mb-4 text-cyan-300">📝 تعديل طلب التوظيف</h2>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input type="text" value={String(editData.name ?? '')} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className={inputStyle} placeholder="الاسم" />
               <input type="text" value={String(editData.phone ?? '')} onChange={(e) => setEditData({ ...editData, phone: e.target.value })} className={inputStyle} placeholder="رقم الهاتف" />
@@ -526,7 +526,11 @@ export default function AdminHirePage() {
               <div>
                 {safeImage(selected.image_url ?? (selected.image as string | undefined) ?? (selected.photo as string | undefined)) ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={safeImage(selected.image_url ?? (selected.image as string | undefined) ?? (selected.photo as string | undefined)) as string} alt={selected.name || 'image'} className="w-full h-64 object-cover rounded border border-white/10 mb-3" />
+                  <img
+                    src={safeImage(selected.image_url ?? (selected.image as string | undefined) ?? (selected.photo as string | undefined)) as string}
+                    alt={selected.name ?? 'image'}
+                    className="w-full h-64 object-cover rounded border border-white/10 mb-3"
+                  />
                 ) : (
                   <div className="w-full h-64 bg-gray-800 rounded border border-white/10 mb-3 flex items-center justify-center text-gray-500">لا توجد صورة</div>
                 )}
@@ -553,25 +557,28 @@ export default function AdminHirePage() {
                 <div className="mb-3">
                   <p className="text-sm text-gray-400"><strong>الموقع على الخريطة:</strong></p>
                   <div className="mt-2">
-                    {parseLocation(selected.location) ? (
-                      <div className="w-full h-64 rounded overflow-hidden border border-white/6">
-                        <MapContainer
-                          center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
-                          zoom={13}
-                          style={{ height: '100%', width: '100%' }}
-                          scrollWheelZoom={false}
-                        >
-                          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                          <Marker position={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}>
-                            <Popup>
-                              {selected.name ?? ''} <br /> {selected.location ?? ''}
-                            </Popup>
-                          </Marker>
-                        </MapContainer>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-gray-800 rounded text-sm text-gray-400">لا توجد إحداثيات صحيحة للعرض</div>
-                    )}
+                    {(() => {
+                      const loc = parseLocation(selected.location);
+                      return loc ? (
+                        <div className="w-full h-64 rounded overflow-hidden border border-white/6">
+                          <MapContainer
+                            center={[loc.lat, loc.lng]}
+                            zoom={13}
+                            style={{ height: '100%', width: '100%' }}
+                            scrollWheelZoom={false}
+                          >
+                            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                            <Marker position={[loc.lat, loc.lng]}>
+                              <Popup>
+                                {selected.name ?? ''} <br /> {selected.location ?? ''}
+                              </Popup>
+                            </Marker>
+                          </MapContainer>
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-gray-800 rounded text-sm text-gray-400">لا توجد إحداثيات صحيحة للعرض</div>
+                      );
+                    })()}
                   </div>
                 </div>
 
