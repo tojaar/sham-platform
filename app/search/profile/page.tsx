@@ -1,7 +1,18 @@
+// app/profile/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import React, { useEffect, useState } from 'react';
+import type { FC } from 'react';
+
+/**
+ * IMPORTANT:
+ * لا تستورد supabase على مستوى الوحدة لتجنّب خطأ prerender ("supabaseKey is required").
+ * استورد العميل ديناميكياً داخل الدوال التي تعمل على جهة العميل فقط.
+ */
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
 
 type SupabaseUserLike = {
   email?: string | null;
@@ -10,12 +21,15 @@ type SupabaseUserLike = {
   [key: string]: unknown;
 };
 
-export default function ProfilePage() {
+const ProfilePage: FC = () => {
   const [user, setUser] = useState<SupabaseUserLike | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     const fetchUser = async () => {
       try {
+        const supabase = await getSupabase();
         const res = await supabase.auth.getUser();
         const data = res?.data as unknown;
 
@@ -40,29 +54,45 @@ export default function ProfilePage() {
           extracted = null;
         }
 
-        setUser(extracted);
+        if (mounted) setUser(extracted);
       } catch (err) {
         console.error('Failed to get user from supabase', err);
-        setUser(null);
+        if (mounted) setUser(null);
       }
     };
+
     fetchUser();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   if (!user) return <p>جاري تحميل البيانات...</p>;
 
   // compute role safely without using any
   const role =
-    user.user_metadata && typeof user.user_metadata === 'object' && 'role' in user.user_metadata && typeof (user.user_metadata as Record<string, unknown>).role === 'string'
+    user.user_metadata &&
+    typeof user.user_metadata === 'object' &&
+    'role' in user.user_metadata &&
+    typeof (user.user_metadata as Record<string, unknown>).role === 'string'
       ? ((user.user_metadata as Record<string, unknown>).role as string)
       : 'غير محدد';
 
   return (
     <main style={{ padding: '2rem' }}>
       <h1>👤 معلومات المستخدم</h1>
-      <p><strong>البريد الإلكتروني:</strong> {user.email ?? '—'}</p>
-      <p><strong>الدور:</strong> {role}</p>
-      <p><strong>المعرف:</strong> {user.id ?? '—'}</p>
+      <p>
+        <strong>البريد الإلكتروني:</strong> {user.email ?? '—'}
+      </p>
+      <p>
+        <strong>الدور:</strong> {role}
+      </p>
+      <p>
+        <strong>المعرف:</strong> {user.id ?? '—'}
+      </p>
     </main>
   );
-}
+};
+
+export default ProfilePage;
