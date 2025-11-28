@@ -2,11 +2,19 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import 'leaflet/dist/leaflet.css';
 
-// لم نعد نستورد react-leaflet أو leaflet عند مستوى الوحدة لتجنّب SSR error.
-// سنحمّلهما ديناميكياً داخل useEffect على المتصفح فقط.
+/**
+ * IMPORTANT:
+ * لا تستورد supabase على مستوى الوحدة لتجنّب خطأ prerender ("supabaseKey is required").
+ * استورد العميل ديناميكياً داخل الدوال التي تعمل على جهة العميل فقط.
+ */
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
 
+/* ---------- Types ---------- */
 type Comm = {
   id: string;
   title?: string | null;
@@ -31,19 +39,29 @@ type Comm = {
   [key: string]: unknown;
 };
 
-// helper: parse location strings like "lat,lng" or JSON-ish
+type LatLng = { lat: number; lng: number };
+
+type LeafletComponents = {
+  MapContainer?: React.JSXElementConstructor<unknown>;
+  TileLayer?: React.JSXElementConstructor<unknown>;
+  Marker?: React.JSXElementConstructor<unknown>;
+  Popup?: React.JSXElementConstructor<unknown>;
+  PopupContent?: React.JSXElementConstructor<unknown>;
+};
+
+/* ---------- Helpers ---------- */
+
+// parse location strings like "lat,lng" or JSON-ish
 const parseLocation = (loc?: string | null) => {
   if (!loc) return null;
   try {
     const s = String(loc).trim();
-    // coords "lat,lng" or "lat lng"
     const parts = s.includes(',') ? s.split(',') : s.split(/\s+/);
     if (parts.length >= 2) {
       const lat = Number(parts[0]);
       const lng = Number(parts[1]);
       if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
     }
-    // try JSON
     if (s.startsWith('{')) {
       const parsed = JSON.parse(s.replace(/(\w+)\s*:/g, '"$1":'));
       const lat = Number(parsed.lat ?? parsed.latitude ?? parsed.latitiude);
@@ -56,7 +74,7 @@ const parseLocation = (loc?: string | null) => {
   }
 };
 
-// MapAutoCenter component kept (will be used from react-leaflet once loaded)
+// MapAutoCenter component (used when map instance is available)
 function MapAutoCenter({ map, coords }: { map: unknown; coords: { lat: number; lng: number } | null }) {
   useEffect(() => {
     if (!map || !coords) return;
@@ -75,12 +93,7 @@ function MapAutoCenter({ map, coords }: { map: unknown; coords: { lat: number; l
   return null;
 }
 
-type LeafletComponents = {
-  MapContainer?: React.JSXElementConstructor<unknown>;
-  TileLayer?: React.JSXElementConstructor<unknown>;
-  Marker?: React.JSXElementConstructor<unknown>;
-  Popup?: React.JSXElementConstructor<unknown>;
-};
+/* ---------- Component ---------- */
 
 export default function SearchCommForm() {
   const [comms, setComms] = useState<Comm[]>([]);
@@ -102,18 +115,19 @@ export default function SearchCommForm() {
   const [LeafletLoaded, setLeafletLoaded] = useState(false);
   const LeafletRef = useRef<LeafletComponents | null>(null);
 
-  // small helper to safely read string properties from Comm
+  // helper to safely read string properties from Comm
   const getString = (obj: Comm | null, key: string) => {
     if (!obj) return undefined;
     const v = obj[key];
     return typeof v === 'string' && v ? v : undefined;
   };
 
-  // Load data
+  /* ---------- fetch data (client-only supabase) ---------- */
   const fetchComms = async () => {
     setLoading(true);
     setMessage(null);
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase
         .from('ads')
         .select('*')
@@ -135,27 +149,25 @@ export default function SearchCommForm() {
 
   useEffect(() => {
     fetchComms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // dynamic import of leaflet + react-leaflet + CSS on client only
+  /* ---------- dynamic leaflet loader (client-only) ---------- */
   useEffect(() => {
     let mounted = true;
     (async () => {
       if (typeof window === 'undefined') return;
       try {
-        // inject leaflet css only once (avoid TypeScript dynamic CSS import issue)
+        // inject leaflet css only once
         if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
           const link = document.createElement('link');
           link.rel = 'stylesheet';
           link.dataset.leafletCss = '1';
-          // use import.meta.url to locate package asset during bundling
           try {
             link.href = new URL('leaflet/dist/leaflet.css', import.meta.url).toString();
           } catch {
-            // fallback to package path (works in many setups)
             link.href = '/node_modules/leaflet/dist/leaflet.css';
           }
-          // append and wait for load (resolve even on error)
           await new Promise<void>((resolve) => {
             link.onload = () => resolve();
             link.onerror = () => resolve();
@@ -165,7 +177,7 @@ export default function SearchCommForm() {
 
         const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
 
-        // fix Leaflet icons for bundlers (after leaflet loaded)
+        // fix Leaflet icons for bundlers
         try {
           const L = leafletModule as unknown as {
             Icon?: {
@@ -178,7 +190,6 @@ export default function SearchCommForm() {
           if (L && L.Icon && L.Icon.Default) {
             try {
               if (L.Icon.Default.prototype && '_getIconUrl' in L.Icon.Default.prototype) {
-                // remove problematic method if present using Reflect to avoid dynamic-delete lint
                 Reflect.deleteProperty(L.Icon.Default.prototype as object, '_getIconUrl');
               }
             } catch {}
@@ -208,6 +219,7 @@ export default function SearchCommForm() {
     };
   }, []);
 
+  /* ---------- derived lists ---------- */
   const countries = useMemo(() => {
     const s = new Set<string>();
     comms.forEach((x) => {
@@ -290,6 +302,16 @@ export default function SearchCommForm() {
     }, 200);
   };
 
+  const closeDetails = () => {
+    setSelected(null);
+  };
+
+  const getImageFor = (c?: Comm | null) => {
+    if (!c) return null;
+    return (c.image_url ?? c.company_logo ?? null) as string | null;
+  };
+
+  /* ---------- Render ---------- */
   return (
     <main className="min-h-screen bg-[#071118] text-white antialiased relative">
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#071118] via-[#071827] to-[#021018]" />
@@ -391,57 +413,53 @@ export default function SearchCommForm() {
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         {img ? <img src={String(img)} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
                       </div>
-
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold text-cyan-300 truncate">{c.title ?? c.category ?? '—'}</h3>
-                        <div className="text-xs text-white/70 mt-1 line-clamp-2">{c.description ?? c.company ?? '—'}</div>
-                        <div className="text-xs text-white/60 mt-2">{c.city ?? '—'} • {c.province ?? '—'}</div>
+                        <h3 className="text-sm font-semibold truncate">{c.title ?? c.company ?? '—'}</h3>
+                        <p className="text-xs text-white/60 mt-1 truncate">{c.city ?? '—'}{c.province ? ` • ${c.province}` : ''}</p>
+                        <div className="mt-2 text-sm text-white/70">{c.price ?? ''}</div>
                       </div>
                     </div>
-
                     <div className="mt-3 flex items-center justify-between gap-2">
-                      <div className="text-xs text-white/60">{c.price ?? '—'}</div>
-                      <div className="flex gap-2">
-                        <button onClick={() => openDetails(c)} className="px-3 py-1 bg-cyan-600 rounded text-sm">عرض التفاصيل</button>
-                      </div>
+                      <div className="text-xs text-white/60">{fmtDate(c.created_at)}</div>
+                      <button onClick={() => openDetails(c)} className="px-3 py-1 rounded bg-white/6 hover:bg-white/10 text-sm">عرض</button>
                     </div>
                   </article>
                 );
               })}
             </div>
           ) : (
-            // list view: image at left, content to right, mobile friendly
-            <ul className="space-y-3">
+            <ul className="space-y-3 pb-8">
               {filtered.map((c) => {
-                const img = c.company_logo ?? c.image_url ?? null;
+                const loc = parseLocation(c.location ?? (c.location_lat != null && c.location_lng != null ? `${c.location_lat},${c.location_lng}` : undefined));
                 return (
                   <li key={c.id}>
-                    <article
-                      onClick={() => openDetails(c)}
-                      className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 flex items-center gap-4 transition"
-                    >
-                      <div className="w-20 h-20 rounded-md bg-[#06121a] overflow-hidden flex-shrink-0">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        {img ? <img src={String(img)} alt={c.title ?? 'صورة'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-xs text-white/60">لا صورة</div>}
-                       </div>
+                    <article className="group bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-4 flex items-center gap-4 transition">
+                      <div className="w-12 h-12 rounded-md bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                        <span className="text-sm">{(c.category ?? 'إعلان').slice(0, 2).toUpperCase()}</span>
+                      </div>
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-3">
-                          <h3 className="text-sm sm:text-base font-semibold truncate">{c.title ?? c.category ?? '—'}</h3>
+                          <h3 className="text-sm sm:text-base font-semibold truncate">{c.title ?? c.company ?? '—'}</h3>
                           <time className="text-xs text-white/60">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</time>
                         </div>
-                        <p className="text-xs text-white/70 truncate mt-1">{c.company ?? c.contact ?? '—'}</p>
-                        <div className="mt-2 flex items-center gap-3 text-xs text-white/60">
-                          <span>{c.city ?? '—'}</span>
-                          <span className="hidden sm:inline">•</span>
-                          <span className="hidden sm:inline">{c.province ?? '—'}</span>
-                          <span className="hidden sm:inline">•</span>
-                          <span className="hidden sm:inline">{c.price ? c.price : '—'}</span>
+
+                        <div className="flex items-center gap-3 mt-2">
+                          {getImageFor(c) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={getImageFor(c) as string} alt="صورة" width={40} height={40} className="rounded-full border border-white/10 object-cover" />
+                          ) : (
+                            <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-[10px] text-white/50">لا صورة</div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs text-white/70 truncate max-w-[220px]">{c.company ?? c.contact ?? '—'}</p>
+                            <p className="text-xs text-white/60 truncate">{c.city ?? '—'}{c.province ? ` • ${c.province}` : ''}</p>
+                          </div>
                         </div>
-                        <div className="mt-2 text-xs text-white/60 line-clamp-2">{c.description ?? ''}</div>
                       </div>
 
                       <div className="flex-shrink-0">
-                        <button className="px-3 py-1 rounded-md bg-white/6 hover:bg-white/10 text-sm">عرض التفاصيل</button>
+                        <button onClick={() => openDetails(c)} className="px-3 py-1 rounded-md bg-white/6 hover:bg-white/10 text-sm">عرض</button>
                       </div>
                     </article>
                   </li>
@@ -456,7 +474,6 @@ export default function SearchCommForm() {
       {selected && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
-
           <div className="relative max-w-4xl w-full bg-[#061017] border border-white/6 rounded-lg overflow-hidden shadow-xl z-10">
             <div className="flex items-start justify-between p-4 border-b border-white/6">
               <div className="flex items-center gap-3">
@@ -501,7 +518,6 @@ export default function SearchCommForm() {
                     <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
                     <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
                     <div><strong>العنوان:</strong> <div className="text-white/70 inline">{selected.address ?? '—'}</div></div>
-
                   </div>
 
                   <div className="mt-2 text-xs text-white/60">
@@ -517,7 +533,7 @@ export default function SearchCommForm() {
                   // determine coords
                   const loc =
                     parseLocation(selected.location ?? undefined) ??
-                    (selected.location_lat && selected.location_lng ? { lat: selected.location_lat, lng: selected.location_lng } : null);
+                    (selected.location_lat != null && selected.location_lng != null ? { lat: selected.location_lat, lng: selected.location_lng } : null);
 
                   if (loc) {
                     if (!LeafletLoaded || !LeafletRef.current) {
@@ -559,7 +575,7 @@ export default function SearchCommForm() {
                       React.createElement(
                         MarkerComp as React.JSXElementConstructor<unknown>,
                         { position: [loc.lat, loc.lng] },
-                        React.createElement(PopupComp as React.JSXElementConstructor<unknown>, null, `${selected.title ?? 'موقع'}\n${selected.address ?? ''}`)
+                        React.createElement(`PopupComp as React.JSXElementConstructor<unknown>, null, ${selected.title ?? 'موقع'}\n${selected.address ?? ''}`)
                       )
                     );
                   }
