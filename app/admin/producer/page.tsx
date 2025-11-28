@@ -155,9 +155,6 @@ export default function AdminProducerForm() {
         // ignore realtime setup errors
       }
     })();
-
-    // run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchMembers]);
 
   /* Filters, pagination, export */
