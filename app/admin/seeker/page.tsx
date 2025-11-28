@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
 import type { PostgrestResponse } from '@supabase/supabase-js';
 
@@ -60,14 +61,8 @@ export default function AdminSeekerForm() {
   const [batchSelection, setBatchSelection] = useState<Record<string, boolean>>({});
   const [busyIds, setBusyIds] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    fetchRows();
-    return () => { document.body.style.overflow = ''; };
-    // dependencies intentionally include all UI filters/pagination
-  }, [query, filterStatus, sortBy, sortDir, page, pageSize]);
-
   // --- Helpers ---
-  function parseLocation(loc?: string | null) {
+  const parseLocation = useCallback((loc?: string | null) => {
     if (!loc) return null;
     const parts = String(loc).split(',').map(s => s.trim());
     if (parts.length !== 2) return null;
@@ -75,14 +70,14 @@ export default function AdminSeekerForm() {
     const lng = Number(parts[1]);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
     return { lat, lng };
-  }
+  }, []);
 
   function setBusy(id: string, v: boolean) {
     setBusyIds(prev => ({ ...prev, [id]: v }));
   }
 
   // --- Fetch rows with correct query building and normalization ---
-  async function fetchRows() {
+  const fetchRows = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
@@ -99,7 +94,6 @@ export default function AdminSeekerForm() {
 
       if (query && query.trim()) {
         const q = query.trim();
-        // use .or with a single string argument
         qb = qb.or(`name.ilike.%${q}%,phone.ilike.%${q}%,payment_code.ilike.%${q}%,transaction_id.ilike.%${q}%`);
       }
 
@@ -133,10 +127,15 @@ export default function AdminSeekerForm() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [page, pageSize, sortBy, sortDir, filterStatus, query]);
+
+  useEffect(() => {
+    fetchRows();
+    return () => { document.body.style.overflow = ''; };
+  }, [fetchRows]);
 
   // --- Single row operations (robust update with rollback) ---
-  async function updateStatus(row: Seeker, status: 'approved' | 'rejected' | 'pending') {
+  const updateStatus = useCallback(async (row: Seeker, status: 'approved' | 'rejected' | 'pending') => {
     setError(null);
     if (!row?.id) return;
     if (busyIds[row.id]) return;
@@ -178,9 +177,9 @@ export default function AdminSeekerForm() {
     } finally {
       setBusy(row.id, false);
     }
-  }
+  }, [busyIds, rows, selected]);
 
-  async function deleteRow(row: Seeker) {
+  const deleteRow = useCallback(async (row: Seeker) => {
     setError(null);
     if (!row?.id) return;
     if (busyIds[row.id]) return;
@@ -200,9 +199,9 @@ export default function AdminSeekerForm() {
     } finally {
       setBusy(row.id, false);
     }
-  }
+  }, [busyIds, selected]);
 
-  async function saveEdit(edited: Seeker | null) {
+  const saveEdit = useCallback(async (edited: Seeker | null) => {
     if (!edited) return;
     setError(null);
     if (!edited.id) return setError('السجل غير صالح');
@@ -251,10 +250,10 @@ export default function AdminSeekerForm() {
     } finally {
       setBusy(edited.id, false);
     }
-  }
+  }, [selected]);
 
   // --- Batch operations (update both status and approved) ---
-  async function batchApprove() {
+  const batchApprove = useCallback(async () => {
     const ids = Object.keys(batchSelection).filter(id => batchSelection[id]);
     if (ids.length === 0) return setError('لم يتم اختيار أي عناصر');
     setLoading(true);
@@ -275,9 +274,9 @@ export default function AdminSeekerForm() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [batchSelection, selected]);
 
-  async function batchReject() {
+  const batchReject = useCallback(async () => {
     const ids = Object.keys(batchSelection).filter(id => batchSelection[id]);
     if (ids.length === 0) return setError('لم يتم اختيار أي عناصر');
     setLoading(true);
@@ -298,7 +297,7 @@ export default function AdminSeekerForm() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [batchSelection, selected]);
 
   const totalPages = totalCount ? Math.ceil(totalCount / pageSize) : null;
 
@@ -406,7 +405,9 @@ export default function AdminSeekerForm() {
 
                   <div className="px-4 py-3 border-b border-white/6 flex items-center justify-center">
                     {r.image_url ? (
-                      <img src={String(r.image_url)} alt="img" className="w-14 h-10 object-cover rounded cursor-pointer" onClick={() => setSelected(r)} />
+                      <div className="w-14 h-10 relative rounded overflow-hidden cursor-pointer" onClick={() => setSelected(r)}>
+                        <Image src={String(r.image_url)} alt={r.name ?? 'image'} width={56} height={40} className="object-cover" unoptimized />
+                      </div>
                     ) : (
                       <div className="w-14 h-10 bg-white/5 rounded flex items-center justify-center text-xs">لا صورة</div>
                     )}
@@ -492,7 +493,9 @@ export default function AdminSeekerForm() {
                 <div className="md:col-span-1">
                   <div className="bg-white/5 rounded overflow-hidden">
                     {selected?.image_url ? (
-                      <img src={String(selected.image_url)} alt="image" className="w-full h-56 object-cover" />
+                      <div className="w-full h-56 relative">
+                        <Image src={String(selected.image_url)} alt={selected.name ?? 'image'} width={800} height={448} className="object-cover w-full h-full" unoptimized />
+                      </div>
                     ) : (
                       <div className="w-full h-56 flex items-center justify-center text-white/60">لا صورة</div>
                     )}
