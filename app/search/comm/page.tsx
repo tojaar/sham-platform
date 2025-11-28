@@ -46,7 +46,6 @@ type LeafletComponents = {
   TileLayer?: React.JSXElementConstructor<unknown>;
   Marker?: React.JSXElementConstructor<unknown>;
   Popup?: React.JSXElementConstructor<unknown>;
-  PopupContent?: React.JSXElementConstructor<unknown>;
 };
 
 /* ---------- Helpers ---------- */
@@ -115,7 +114,7 @@ export default function SearchCommForm() {
   const [LeafletLoaded, setLeafletLoaded] = useState(false);
   const LeafletRef = useRef<LeafletComponents | null>(null);
 
-  // helper to safely read string properties from Comm
+  // small helper to safely read string properties from Comm
   const getString = (obj: Comm | null, key: string) => {
     if (!obj) return undefined;
     const v = obj[key];
@@ -158,7 +157,7 @@ export default function SearchCommForm() {
     (async () => {
       if (typeof window === 'undefined') return;
       try {
-        // inject leaflet css only once
+        // inject leaflet css only once (avoid TypeScript dynamic CSS import issue)
         if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
           const link = document.createElement('link');
           link.rel = 'stylesheet';
@@ -177,27 +176,26 @@ export default function SearchCommForm() {
 
         const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
 
-        // fix Leaflet icons for bundlers
+        // fix default icon paths (safe reflection)
         try {
-          const L = leafletModule as unknown as {
-            Icon?: {
-              Default?: {
-                prototype?: Record<string, unknown>;
-                mergeOptions?: (opts: Record<string, string>) => void;
-              };
-            };
-          };
-          if (L && L.Icon && L.Icon.Default) {
-            try {
-              if (L.Icon.Default.prototype && '_getIconUrl' in L.Icon.Default.prototype) {
-                Reflect.deleteProperty(L.Icon.Default.prototype as object, '_getIconUrl');
+          const leafletUnknown: unknown = leafletModule;
+          if (leafletUnknown && typeof leafletUnknown === 'object') {
+            const Icon = Reflect.get(leafletUnknown as object, 'Icon') as unknown;
+            if (Icon && typeof Icon === 'object') {
+              const Default = Reflect.get(Icon as object, 'Default') as unknown;
+              if (Default && typeof Default === 'object') {
+                const proto = Reflect.get(Default as object, 'prototype') as Record<string, unknown> | undefined;
+                if (proto && '_getIconUrl' in proto) {
+                  Reflect.deleteProperty(proto, '_getIconUrl');
+                }
+                const mergeOptions = Reflect.get(Default as object, 'mergeOptions') as ((opts: Record<string, string>) => void) | undefined;
+                mergeOptions?.({
+                  iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
+                  iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
+                  shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
+                });
               }
-            } catch {}
-            L.Icon.Default.mergeOptions?.({
-              iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-              iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-              shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-            });
+            }
           }
         } catch (err) {
           console.warn('leaflet icon fix failed', err);
@@ -209,9 +207,10 @@ export default function SearchCommForm() {
           Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<unknown>,
           Popup: (reactLeafletModule as Record<string, unknown>).Popup as React.JSXElementConstructor<unknown>,
         };
+
         if (mounted) setLeafletLoaded(true);
       } catch (err) {
-        console.error('Failed to load leaflet/react-leaflet dynamically', err);
+        console.error('failed loading leaflet/react-leaflet', err);
       }
     })();
     return () => {
@@ -222,19 +221,13 @@ export default function SearchCommForm() {
   /* ---------- derived lists ---------- */
   const countries = useMemo(() => {
     const s = new Set<string>();
-    comms.forEach((x) => {
-      if (typeof x.country === 'string' && x.country) s.add(x.country);
-    });
+    comms.forEach((c) => { if (typeof c.country === 'string' && c.country) s.add(c.country); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms]);
 
   const provinces = useMemo(() => {
     const s = new Set<string>();
-    comms
-      .filter((x) => (country ? x.country === country : true))
-      .forEach((x) => {
-        if (typeof x.province === 'string' && x.province) s.add(x.province);
-      });
+    comms.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (typeof x.province === 'string' && x.province) s.add(x.province); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms, country]);
 
@@ -243,21 +236,17 @@ export default function SearchCommForm() {
     comms
       .filter((x) => (country ? x.country === country : true))
       .filter((x) => (province ? x.province === province : true))
-      .forEach((x) => {
-        if (typeof x.city === 'string' && x.city) s.add(x.city);
-      });
+      .forEach((x) => { if (typeof x.city === 'string' && x.city) s.add(x.city); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms, country, province]);
 
   const categories = useMemo(() => {
     const s = new Set<string>();
-    comms.forEach((x) => {
-      if (typeof x.category === 'string' && x.category) s.add(x.category);
-    });
+    comms.forEach((x) => { if (typeof x.category === 'string' && x.category) s.add(x.category); });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [comms]);
 
-  // advanced search: tokenization, simple boosting for title/company
+  /* ---------- filtering ---------- */
   const filtered = useMemo(() => {
     const qLower = q.trim().toLowerCase();
     const tokens = qLower.split(/\s+/).filter(Boolean);
@@ -270,7 +259,6 @@ export default function SearchCommForm() {
 
       if (!tokens.length) return true;
 
-      // match tokens across multiple important fields
       const hay = [
         c.title ?? '',
         c.company ?? '',
@@ -281,30 +269,22 @@ export default function SearchCommForm() {
         c.price ?? '',
       ].join(' | ').toLowerCase();
 
-      // require all tokens to appear in hay (AND search). if any token missing, exclude
       return tokens.every((t) => hay.includes(t));
     });
-  }, [comms, country, province, city, category, q]);
+  }, [comms, category, country, province, city, q]);
 
-  // UI helpers
+  /* ---------- helpers ---------- */
   const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleString() : '');
 
-  // when opening details, force map remount
   const openDetails = (c: Comm) => {
     setSelected(c);
     setMapKey((k) => k + 1);
-    // small delay so modal opens before map attempts invalidateSize
     setTimeout(() => {
-      try {
-        const m = mapRef.current as { invalidateSize?: () => void } | null;
-        m?.invalidateSize?.();
-      } catch {}
+      try { (mapRef.current as { invalidateSize?: () => void })?.invalidateSize?.(); } catch {}
     }, 200);
   };
 
-  const closeDetails = () => {
-    setSelected(null);
-  };
+  const closeDetails = () => setSelected(null);
 
   const getImageFor = (c?: Comm | null) => {
     if (!c) return null;
@@ -430,7 +410,7 @@ export default function SearchCommForm() {
           ) : (
             <ul className="space-y-3 pb-8">
               {filtered.map((c) => {
-                const loc = parseLocation(c.location ?? (c.location_lat != null && c.location_lng != null ? `${c.location_lat},${c.location_lng}` : undefined));
+                const loc = `parseLocation(c.location ?? (c.location_lat != null && c.location_lng != null ? ${c.location_lat},${c.location_lng} : undefined));`
                 return (
                   <li key={c.id}>
                     <article className="group bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-4 flex items-center gap-4 transition">
@@ -514,7 +494,6 @@ export default function SearchCommForm() {
 
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     <div><strong>الشركة:</strong> <div className="text-white/70 inline">{getString(selected, 'name') ?? '—'}</div></div>
-
                     <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
                     <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
                     <div><strong>العنوان:</strong> <div className="text-white/70 inline">{selected.address ?? '—'}</div></div>
@@ -530,7 +509,6 @@ export default function SearchCommForm() {
               <div className="h-64 lg:h-full bg-black rounded-md overflow-hidden border border-white/6">
                 {/* react-leaflet map (no iframe) */}
                 {(() => {
-                  // determine coords
                   const loc =
                     parseLocation(selected.location ?? undefined) ??
                     (selected.location_lat != null && selected.location_lng != null ? { lat: selected.location_lat, lng: selected.location_lng } : null);
@@ -549,7 +527,6 @@ export default function SearchCommForm() {
                       return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
                     }
 
-                    // Use React.createElement to avoid JSX typing issues with runtime-loaded constructors
                     return React.createElement(
                       MapContainerComp as React.JSXElementConstructor<unknown>,
                       {
@@ -575,7 +552,7 @@ export default function SearchCommForm() {
                       React.createElement(
                         MarkerComp as React.JSXElementConstructor<unknown>,
                         { position: [loc.lat, loc.lng] },
-                        React.createElement(`PopupComp as React.JSXElementConstructor<unknown>, null, ${selected.title ?? 'موقع'}\n${selected.address ?? ''}`)
+                        React.createElement(PopupComp as React.JSXElementConstructor<unknown>, null, `${selected.title ?? 'موقع'}\n${selected.address ?? ''}`)
                       )
                     );
                   }
