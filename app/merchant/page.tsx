@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import 'leaflet/dist/leaflet.css';
 
 type CommPayload = {
   category: string;
@@ -21,7 +21,7 @@ type CommPayload = {
   description?: string | null;
   payment_code?: string | null;
   payment_id?: string | null;
-  approved?: boolean;
+  approved?: boolean | null;
   created_by?: string | null;
   [key: string]: unknown;
 };
@@ -34,6 +34,8 @@ type LeafletAPI = {
   Marker?: React.JSXElementConstructor<unknown>;
   useMapEvents?: (handlers: { click: (e: { latlng: LatLng }) => void }) => void;
 };
+
+/* ---------- Utilities ---------- */
 
 const fileToBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -60,6 +62,15 @@ const uploadToImgbb = async (file: File | null): Promise<string | null> => {
   if (!res.ok || !json?.data?.url) throw new Error(json?.error?.message ?? 'فشل رفع الصورة');
   return json.data.url as string;
 };
+
+/* IMPORTANT: لا تستورد supabase على مستوى الوحدة.
+   أنشئ العميل ديناميكياً داخل الدوال التي تعمل على جهة العميل فقط. */
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
+
+/* ---------- Component ---------- */
 
 export default function PostAdPage() {
   const [category, setCategory] = useState('cars');
@@ -95,7 +106,9 @@ export default function PostAdPage() {
       const url = URL.createObjectURL(imageFile);
       setImagePreview(url);
       return () => URL.revokeObjectURL(url);
-    } else setImagePreview(null);
+    } else {
+      setImagePreview(null);
+    }
   }, [imageFile]);
 
   useEffect(() => {
@@ -103,7 +116,9 @@ export default function PostAdPage() {
       const url = URL.createObjectURL(logoFile);
       setLogoPreview(url);
       return () => URL.revokeObjectURL(url);
-    } else setLogoPreview(null);
+    } else {
+      setLogoPreview(null);
+    }
   }, [logoFile]);
 
   useEffect(() => {
@@ -114,9 +129,9 @@ export default function PostAdPage() {
       try {
         // inject leaflet CSS once (safe for SSR)
         if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
-          const link = document.createElement('link');
+          const link = document.createElement('link') as HTMLLinkElement;
           link.rel = 'stylesheet';
-          (link as HTMLLinkElement).dataset.leafletCss = '1';
+          link.dataset.leafletCss = '1';
           try {
             link.href = new URL('leaflet/dist/leaflet.css', import.meta.url).toString();
           } catch {
@@ -186,6 +201,7 @@ export default function PostAdPage() {
   };
 
   const validate = () => {
+    setMessage(null);
     if (isCompany && !companyName.trim()) {
       setMessage('الرجاء كتابة اسم الشركة');
       return false;
@@ -220,6 +236,10 @@ export default function PostAdPage() {
       const imageUrl = imageFile ? await uploadToImgbb(imageFile) : null;
       const logoUrl = logoFile ? await uploadToImgbb(logoFile) : null;
 
+      // create supabase client at runtime (client-only)
+      const supabase = await getSupabase();
+
+      // ensure user is authenticated
       const { data: userData } = await supabase.auth.getUser();
       const user = userData?.user;
       if (!user) {
@@ -253,6 +273,25 @@ export default function PostAdPage() {
       if (error) throw error;
 
       setMessage('✅ تم حفظ الإعلان بنجاح. بانتظار الموافقة.');
+      // reset form
+      setCategory('cars');
+      setIsCompany(false);
+      setCompanyName('');
+      setPersonName('');
+      setPhone('');
+      setLogoFile(null);
+      setImageFile(null);
+      setCountry('');
+      setProvince('');
+      setCity('');
+      setAddress('');
+      setCoords(null);
+      setPrice('');
+      setDescription('');
+      setPaymentCode('');
+      setPaymentId('');
+      setImagePreview(null);
+      setLogoPreview(null);
     } catch (err) {
       console.error(err);
       const msg = (err as { message?: string })?.message ?? String(err);
@@ -327,32 +366,33 @@ export default function PostAdPage() {
         </div>
 
         <div style={{ display: 'grid', gap: 12 }}>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} style={styles.input}>
-            <option value="cars">🚗 سيارات</option>
-            <option value="real_estate">🏠 عقارات</option>
-            <option value="machines">⚙️ آلات</option>
-            <option value="medical">💊 منتجات طبية</option>
-            <option value="home">🛋 أدوات منزلية</option>
-            <option value="food">🍔 أغذية ومشروبات</option>
-            <option value="clothing">👕 ألبسة</option>
-            <option value="jewelry">💍 مجوهرات</option>
-            <option value="animals">🐾 حيوانات</option>
-          </select>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} style={styles.input}>
+              <option value="cars">🚗 سيارات</option>
+              <option value="real_estate">🏠 عقارات</option>
+              <option value="machines">⚙️ آلات</option>
+              <option value="medical">💊 منتجات طبية</option>
+              <option value="home">🛋 أدوات منزلية</option>
+              <option value="food">🍔 أغذية ومشروبات</option>
+              <option value="clothing">👕 ألبسة</option>
+              <option value="jewelry">💍 مجوهرات</option>
+              <option value="animals">🐾 حيوانات</option>
+            </select>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={isCompany} onChange={(e) => setIsCompany(e.target.checked)} />
+              شركة
+            </label>
+          </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
-              <input type="checkbox" checked={isCompany} onChange={(e) => setIsCompany(e.target.checked)} />
-              <span style={{ fontSize: 13, color: '#9fb3c9' }}>أنا شركة</span>
-            </label>
-
             {isCompany ? (
               <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="اسم الشركة" style={{ ...styles.input, flex: 1 }} />
             ) : (
               <input value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="الاسم" style={{ ...styles.input, flex: 1 }} />
             )}
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={styles.input} />
           </div>
-
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={styles.input} />
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }}>
@@ -400,7 +440,6 @@ export default function PostAdPage() {
                     );
                   }
 
-                  // Use React.createElement with unknown-typed props to avoid any usage
                   const mapProps: unknown = {
                     whenCreated: (m: unknown) => {
                       mapRef.current = m;
