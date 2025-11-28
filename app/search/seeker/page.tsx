@@ -1,15 +1,13 @@
 'use client';
 
-/* eslint-disable @next/next/no-img-element */
-
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
 
 /**
- * IMPORTANT:
- * Do NOT import supabase at module scope. Use this dynamic loader inside client-only functions
- * so the Supabase client is created only on the client and not during Next.js prerender/build.
+ * استيراد Supabase ديناميكيًا داخل الدوال التي تعمل على جهة العميل فقط
+ * لتجنّب إنشاء العميل أثناء SSR/prerender (يمنع خطأ "supabaseKey is required").
  */
 async function getSupabase() {
   const mod = await import('@/lib/supabase');
@@ -256,10 +254,13 @@ export default function SearchSeekerForm() {
 
                       <div className="flex items-center gap-3 mt-2">
                         {getImageFor(s) ? (
-                          <img
+                          <Image
                             src={getImageFor(s) as string}
                             alt="صورة"
-                            className="w-10 h-10 object-cover rounded-full border border-white/10"
+                            width={40}
+                            height={40}
+                            className="rounded-full border border-white/10 object-cover"
+                            unoptimized
                           />
                         ) : (
                           <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center text-[10px] text-white/50">لا صورة</div>
@@ -299,64 +300,94 @@ export default function SearchSeekerForm() {
             onClick={closeDetails}
           />
           <div className="relative w-full max-w-4xl bg-[#041018] border border-white/6 rounded p-4 z-10 overflow-y-auto" style={{ maxHeight: '90vh' }}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold">{selected.name ?? selected.profession}</h2>
-                <div className="text-sm text-slate-300 mt-1">{selected.country ?? ''} {`selected.province ? • ${selected.province} : ''} {selected.city ? • ${selected.city} : ''`}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={closeDetails} className="px-3 py-1 rounded bg-white/6">إغلاق</button>
-              </div>
-            </div>
+            <button
+              onClick={closeDetails}
+              aria-label="اغلاق"
+              className="absolute top-3 right-3 z-20 bg-white/6 hover:bg-white/10 text-white p-2 rounded-md shadow"
+            >
+              ✕
+            </button>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-1">
-                <div className="bg-white/5 rounded overflow-hidden">
-                  {getImageFor(selected) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={getImageFor(selected) as string} alt={selected.name ?? 'image'} className="w-full h-56 object-cover" />
-                  ) : (
-                    <div className="w-full h-56 flex items-center justify-center text-white/60">لا صورة</div>
-                  )}
+            <div className="p-4 overflow-auto" style={{ maxHeight: '90vh' }}>
+              <div className="w-full flex items-center justify-center mb-4">
+                {getImageFor(selected) ? (
+                  <Image
+                    src={getImageFor(selected) as string}
+                    alt="صورة المستخدم كبيرة"
+                    width={800}
+                    height={448}
+                    className="w-full max-w-md h-48 sm:h-64 object-cover rounded-lg border border-white/10 shadow"
+                    unoptimized
+                  />
+                ) : (
+                  <div className="w-full max-w-md h-48 sm:h-64 bg-white/6 rounded-lg flex items-center justify-center text-white/50">
+                    لا توجد صورة
+                  </div>
+                )}
+              </div>
+
+              <h2 className="text-lg font-bold">{selected.profession ?? '—'}</h2>
+              <p className="text-sm text-white/70 mt-1">{selected.name ?? '—'}</p>
+
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-white/80">
+                <div className="space-y-2">
+                  <div><strong>الهاتف:</strong> <span className="text-white/70 ml-2">{selected.phone ?? '—'}</span></div>
+                  <div>
+                    <strong>العمر:</strong>{' '}
+                    <span className="text-white/70 ml-2">
+                      {(() => {
+                        const ageVal = (selected as Record<string, unknown>)['age'];
+                        return (typeof ageVal === 'number' || typeof ageVal === 'string') ? ageVal : '—';
+                      })()}
+                    </span>
+                  </div>
+                  <div><strong>الشهادات:</strong> <span className="text-white/70 ml-2">{selected.certificates ?? '—'}</span></div>
+                  <div><strong>مكان السكن:</strong> <span className="text-white/70 ml-2">{selected.address ?? '—'}</span></div>
                 </div>
 
-                <div className="mt-3 text-sm text-slate-300 space-y-1">
-                  <div><strong>الاسم:</strong> {selected.name ?? '—'}</div>
-                  <div><strong>المهنة:</strong> {selected.profession ?? '—'}</div>
-                  <div><strong>الهاتف:</strong> {selected.phone ?? '—'}</div>
-                  <div><strong>العنوان:</strong> {selected.address ?? '—'}</div>
-                  <div><strong>إنشئ في:</strong> {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</div>
+                <div className="space-y-2">
+                  <div><strong>المدينة:</strong> <span className="text-white/70 ml-2">{selected.city ?? '—'}</span></div>
+                  <div><strong>المحافظة:</strong> <span className="text-white/70 ml-2">{selected.province ?? '—'}</span></div>
+                  <div><strong>الدولة:</strong> <span className="text-white/70 ml-2">{selected.country ?? '—'}</span></div>
+                  <div><strong>الحالة:</strong> <span className="text-white/70 ml-2">{selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : selected.status ?? 'بانتظار'}</span></div>
                 </div>
               </div>
 
-              <div className="md:col-span-2">
-                {parseLocation(selected.location) ? (
-                  <div className="w-full h-64 rounded overflow-hidden border border-white/6">
-                    <MapContainer center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} zoom={13} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
+              <div className="mt-4 flex items-center gap-2 justify-end">
+                <button
+                  onClick={() => setShowMap((v) => !v)}
+                  className="px-4 py-2 rounded-md bg-white/6 hover:bg-white/10"
+                >
+                  {showMap ? 'إخفاء الخريطة' : 'إظهار الخريطة'}
+                </button>
+              </div>
+
+              {showMap && (
+                <div className="mt-4 h-56 sm:h-72 bg-black rounded-md overflow-hidden border border-white/6">
+                  {parseLocation(selected.location) ? (
+                    <MapContainer
+                      center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
+                      zoom={13}
+                      style={{ height: '100%', width: '100%' }}
+                      scrollWheelZoom={false}
+                    >
                       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                       <Marker position={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}>
                         <Popup>
-                          {selected.name ?? ''} <br /> {selected.location}
+                          {selected.name} <br /> {selected.location}
                         </Popup>
                       </Marker>
                     </MapContainer>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-64 bg-white/5 rounded">لا توجد إحداثيات صحيحة للعرض</div>
-                )}
-
-                <div className="mt-4 text-sm text-slate-300">
-                  <div className="mb-2"><strong>الشهادات</strong></div>
-                  <div>{selected.certificates ?? '—'}</div>
-
-                  <div className="mt-4 flex gap-2">
-                    <a href={`tel:${selected.phone ?? ''}`} className="px-3 py-2 rounded bg-emerald-600">اتصال</a>
-                    <button onClick={() => { navigator.clipboard?.writeText(selected.phone ?? ''); setMessage('تم نسخ رقم الهاتف'); setTimeout(() => setMessage(null), 2000); }} className="px-3 py-2 rounded bg-white/6">نسخ هاتف</button>
-                  </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-center p-4 text-white/70">
+                      لا توجد إحداثيات صحيحة للعرض
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
+              )}
 
+              <div style={{ height: 22 }} />
+            </div>
           </div>
         </div>
       )}
