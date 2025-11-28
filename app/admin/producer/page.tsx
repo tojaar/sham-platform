@@ -1,22 +1,14 @@
-/* eslint-disable @next/next/no-img-element */
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Map as LeafletMap, LeafletMouseEvent } from 'leaflet';
-import type { MapContainerProps, TileLayerProps, MarkerProps } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 /**
- * ملاحظة مهمة حول Supabase:
- * لا نستورد العميل مباشرة عند مستوى الوحدة لتجنب إنشاء العميل أثناء SSR/prerender.
- * بدلاً من ذلك نستخدم استيرادًا ديناميكياً داخل الدوال التي تعمل على جهة العميل فقط.
+ * استيراد Supabase ديناميكياً لتجنّب إنشاء العميل أثناء SSR/prerender.
  */
 async function getSupabase() {
   const mod = await import('@/lib/supabase');
   return mod.supabase;
 }
-
-/* ---------- Types ---------- */
 
 type Member = {
   id: string;
@@ -79,69 +71,6 @@ const toCSV = (rows: Array<Record<string, unknown>>): string => {
   return `${header}\n${body};`
 };
 
-/* ---------- Component: ClientMap (dynamic react-leaflet loader) ---------- */
-
-const ClientMap: React.FC<{
-  center: [number, number];
-  zoom: number;
-  marker?: [number, number] | null;
-  setCoords: (c: { lat: number; lng: number }) => void;
-  mapKey: number;
-}> = ({ center, zoom, marker, setCoords, mapKey: mk }) => {
-  type RLModule = {
-    MapContainer: React.ComponentType<MapContainerProps>;
-    TileLayer: React.ComponentType<TileLayerProps>;
-    Marker: React.ComponentType<MarkerProps>;
-    useMapEvents: (handlers: { click?: (e: LeafletMouseEvent) => void }) => LeafletMap | null;
-  };
-
-  const [componentsLoaded, setComponentsLoaded] = useState<RLModule | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    if (typeof window === 'undefined') return;
-    (async () => {
-      try {
-        const mod = (await import('react-leaflet')) as unknown as RLModule;
-        if (!mounted) return;
-        setComponentsLoaded(mod);
-      } catch (err) {
-        console.warn('Failed to load react-leaflet dynamically', err);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  if (!componentsLoaded) return null;
-
-  const { MapContainer, TileLayer, Marker: RLMarker, useMapEvents } = componentsLoaded;
-
-  const MapClickLocal: React.FC<{ setCoords: (c: { lat: number; lng: number }) => void }> = ({ setCoords: sc }) => {
-    const mapInstance = useMapEvents({
-      click(e: LeafletMouseEvent) {
-        sc({ lat: e.latlng.lat, lng: e.latlng.lng });
-      },
-    });
-
-    useEffect(() => {
-      // no-op: map instance captured by useMapEvents; kept for parity with original design
-      return () => {};
-    }, [mapInstance]);
-
-    return null;
-  };
-
-  return (
-    <MapContainer key={mk} center={center} zoom={zoom} style={{ width: '100%', height: '100%' }}>
-      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      <MapClickLocal setCoords={setCoords} />
-      {marker ? <RLMarker position={marker as [number, number]} /> : null}
-    </MapContainer>
-  );
-};
-
 /* ---------- Main Component ---------- */
 
 export default function AdminProducerForm() {
@@ -168,27 +97,6 @@ export default function AdminProducerForm() {
   const [detail, setDetail] = useState<Member | null>(null);
   const [savingEdit, setSavingEdit] = useState<boolean>(false);
 
-  /* Load Leaflet icons (client-only) */
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    (async () => {
-      try {
-        const L = await import('leaflet');
-        try {
-          (L.Icon.Default as unknown as { mergeOptions: (o: Record<string, string>) => void }).mergeOptions({
-            iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-            iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-            shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-          });
-        } catch {
-          // ignore merge failure
-        }
-      } catch {
-        // ignore
-      }
-    })();
-  }, []);
-
   /* Fetch members from supabase (client-side) */
   const fetchMembers = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -201,7 +109,8 @@ export default function AdminProducerForm() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      // normalize some alternate field names to keep UI consistent without changing behavior
+
+      // Normalize alternate field names so UI remains consistent
       const normalized = (Array.isArray(data) ? data : []).map((r: Record<string, unknown>) => {
         return {
           ...r,
@@ -251,11 +160,6 @@ export default function AdminProducerForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchMembers]);
 
-  const refresh = useCallback(async () => {
-    await fetchMembers();
-    setPage(1);
-  }, [fetchMembers]);
-
   /* Filters, pagination, export */
 
   const filtered = useMemo(() => {
@@ -297,17 +201,8 @@ export default function AdminProducerForm() {
 
   const pageData = useMemo(() => filtered.slice((page - 1) * pageSize, page * pageSize), [filtered, page]);
 
-  const categories = useMemo(() => {
-    const s = new Set<string>();
-    members.forEach((p) => {
-      if ((p as any).category) s.add((p as any).category);
-    });
-    return ['all', ...Array.from(s)];
-  }, [members]);
-
   const exportCSV = useCallback((rows: Member[]) => {
     const csv = toCSV(rows.map(r => {
-      // map to stable keys for CSV
       return {
         id: r.id ?? '',
         name: r.full_name ?? '',
@@ -416,31 +311,6 @@ export default function AdminProducerForm() {
 
     return roots;
   }, [members]);
-
-  // Trigger password-reset request (server endpoint)
-  const requestPasswordReset = useCallback(async (email?: string) => {
-    if (!email) { alert('لا يوجد بريد لإرسال رابط إعادة تعيين كلمة السر.'); return; }
-    if (!confirm(`هل تريد إرسال رابط إعادة تعيين كلمة السر إلى ${email}?`)) return;
-    try {
-      setLoading(true);
-      const res = await fetch('/api/admin/send-reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`${txt} HTTP ${res.status}`);
-      }
-      alert('طلب إعادة التعيين أرسل بنجاح (إن سمح الإعداد). سيصل المستخدم بريده رابط لإعادة التعيين.');
-    } catch (err: unknown) {
-      console.error('requestPasswordReset error', err);
-      const msg = err instanceof Error ? err.message : String(err);
-      alert('فشل إرسال طلب إعادة التعيين: ' + msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   /* ---------- Render (UI) ---------- */
 
