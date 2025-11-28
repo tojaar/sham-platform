@@ -2,15 +2,25 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { supabase } from '@/lib/supabase';
+import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
 
-// تحميل مكونات react-leaflet ديناميكيًا مع تعطيل SSR
+/**
+ * استيراد Supabase ديناميكيًا داخل الدوال التي تعمل على جهة العميل فقط
+ * لتجنّب إنشاء العميل أثناء SSR/prerender (يمنع خطأ "supabaseKey is required").
+ */
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
+
+/* ---------- Leaflet components (client-only) ---------- */
 const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then((m) => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then((m) => m.Popup), { ssr: false });
 
+/* ---------- Types ---------- */
 type Hire = {
   id: string;
   title?: string | null;
@@ -37,34 +47,32 @@ type Hire = {
   [key: string]: unknown;
 };
 
+/* ---------- Component ---------- */
 export default function SearchHirePage() {
   const [hires, setHires] = useState<Hire[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const [q, setQ] = useState('');
-  const [country, setCountry] = useState<string | ''>('');
-  const [province, setProvince] = useState<string | ''>('');
-  const [city, setCity] = useState<string | ''>('');
+  const [country, setCountry] = useState<string>('');
+  const [province, setProvince] = useState<string>('');
+  const [city, setCity] = useState<string>('');
 
   const [selected, setSelected] = useState<Hire | null>(null);
-
-  // مفتاح لإعادة إنشاء الخريطة داخل الـ modal عند تغيير العنصر المحدد
   const [mapKey, setMapKey] = useState(0);
 
-  // إصلاح مسارات أيقونات Leaflet في المتصفح فقط (بدون require)
+  /* ---------- Fix Leaflet icon paths (client-only) ---------- */
   useEffect(() => {
     if (typeof window === 'undefined') return;
     (async () => {
       try {
         const L = await import('leaflet');
         try {
-          if (L && L.Icon && L.Icon.Default && L.Icon.Default.prototype) {
-            // حذف الخاصية بطريقة آمنة
+          if (L && (L as any).Icon && (L as any).Icon.Default && (L as any).Icon.Default.prototype) {
             try {
-              Reflect.deleteProperty(L.Icon.Default.prototype as object, '_getIconUrl');
+              Reflect.deleteProperty((L as any).Icon.Default.prototype, '_getIconUrl');
             } catch {}
-            L.Icon.Default.mergeOptions?.({
+            (L as any).Icon.Default.mergeOptions?.({
               iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
               iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
               shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
@@ -75,13 +83,18 @@ export default function SearchHirePage() {
     })();
   }, []);
 
-  // تطبيع بيانات Supabase لتوحيد الحقول
-  const normalize = (rawInput: unknown): Hire => {
-    const raw = (rawInput && typeof rawInput === 'object') ? (rawInput as Record<string, unknown>) : {};
+  /* ---------- normalize helper (stable) ---------- */
+  const normalize = useCallback((rawInput: unknown): Hire => {
+    const raw = rawInput && typeof rawInput === 'object' ? (rawInput as Record<string, unknown>) : {};
 
-    const getNum = (k: string) => {
+    const getNum = (k: string): number | undefined => {
       const v = raw[k];
-      return typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : undefined);
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string' && v.trim() !== '') {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : undefined;
+      }
+      return undefined;
     };
 
     const imageCandidates = [
@@ -90,7 +103,9 @@ export default function SearchHirePage() {
       raw['photo'],
       raw['img'],
       raw['picture'],
-    ].map((v) => (typeof v === 'string' ? v : undefined)).filter(Boolean) as string[];
+    ]
+      .map((v) => (typeof v === 'string' ? v : undefined))
+      .filter(Boolean) as string[];
 
     const profession =
       (typeof raw['profession'] === 'string' && raw['profession']) ||
@@ -110,7 +125,8 @@ export default function SearchHirePage() {
       if (lat != null && lng != null) locationStr = `${Number(lat)},${Number(lng)};`
     } else if (raw['coords'] && typeof raw['coords'] === 'object') {
       const coords = raw['coords'] as Record<string, unknown>;
-      const lat = coords['lat']; const lng = coords['lng'];
+      const lat = coords['lat'];
+      const lng = coords['lng'];
       if (lat != null && lng != null) locationStr = `${Number(lat)},${Number(lng)};`
     } else if (raw['lat'] != null && raw['lng'] != null) {
       locationStr = `${Number(raw['lat'])},${Number(raw['lng'])};`
@@ -126,15 +142,35 @@ export default function SearchHirePage() {
       id: String(raw['id'] ?? ''),
       title: typeof raw['title'] === 'string' ? raw['title'] : null,
       profession,
-      name: typeof raw['name'] === 'string' ? raw['name'] : (typeof raw['full_name'] === 'string' ? raw['full_name'] : null),
-      phone: typeof raw['phone'] === 'string' ? raw['phone'] : (typeof raw['mobile'] === 'string' ? raw['mobile'] : null),
+      name:
+        typeof raw['name'] === 'string'
+          ? raw['name']
+          : typeof raw['full_name'] === 'string'
+          ? raw['full_name']
+          : null,
+      phone:
+        typeof raw['phone'] === 'string'
+          ? raw['phone']
+          : typeof raw['mobile'] === 'string'
+          ? raw['mobile']
+          : null,
       salary: getNum('salary') ?? getNum('wage') ?? null,
-      description: typeof raw['description'] === 'string' ? raw['description'] : (typeof raw['details'] === 'string' ? raw['details'] : null),
+      description:
+        typeof raw['description'] === 'string'
+          ? raw['description']
+          : typeof raw['details'] === 'string'
+          ? raw['details']
+          : null,
       hours: typeof raw['hours'] === 'string' ? raw['hours'] : null,
       country: typeof raw['country'] === 'string' ? raw['country'] : null,
       province: typeof raw['province'] === 'string' ? raw['province'] : null,
       city: typeof raw['city'] === 'string' ? raw['city'] : null,
-      job_location: typeof raw['job_location'] === 'string' ? raw['job_location'] : (typeof raw['work_place'] === 'string' ? raw['work_place'] : null),
+      job_location:
+        typeof raw['job_location'] === 'string'
+          ? raw['job_location']
+          : typeof raw['work_place'] === 'string'
+          ? raw['work_place']
+          : null,
       location: locationStr ?? null,
       map_location: locationStr ?? null,
       image_url: unifiedImage,
@@ -147,13 +183,14 @@ export default function SearchHirePage() {
       lng: getNum('lng') ?? null,
       ...raw,
     } as Hire;
-  };
+  }, []);
 
-  // جلب البيانات (مغلف بـ useCallback لتجنب تحذير deps)
+  /* ---------- fetchHires (stable) ---------- */
   const fetchHires = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase
         .from('hire_requests')
         .select('*')
@@ -172,21 +209,28 @@ export default function SearchHirePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [normalize]);
 
   useEffect(() => {
     fetchHires();
   }, [fetchHires]);
 
+  /* ---------- derived lists ---------- */
   const countries = useMemo(() => {
     const s = new Set<string>();
-    hires.forEach((x) => { if (typeof x.country === 'string' && x.country) s.add(x.country); });
+    hires.forEach((x) => {
+      if (typeof x.country === 'string' && x.country) s.add(x.country);
+    });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [hires]);
 
   const provinces = useMemo(() => {
     const s = new Set<string>();
-    hires.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (typeof x.province === 'string' && x.province) s.add(x.province); });
+    hires
+      .filter((x) => (country ? x.country === country : true))
+      .forEach((x) => {
+        if (typeof x.province === 'string' && x.province) s.add(x.province);
+      });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [hires, country]);
 
@@ -195,11 +239,14 @@ export default function SearchHirePage() {
     hires
       .filter((x) => (country ? x.country === country : true))
       .filter((x) => (province ? x.province === province : true))
-      .forEach((x) => { if (typeof x.city === 'string' && x.city) s.add(x.city); });
+      .forEach((x) => {
+        if (typeof x.city === 'string' && x.city) s.add(x.city);
+      });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [hires, country, province]);
 
-  const parseLocation = (loc?: string | null) => {
+  /* ---------- helpers ---------- */
+  const parseLocation = useCallback((loc?: string | null) => {
     if (!loc) return null;
     try {
       const s = String(loc).trim();
@@ -220,15 +267,16 @@ export default function SearchHirePage() {
     } catch {
       return null;
     }
-  };
+  }, []);
 
-  const safeImage = (u?: string | null) => {
+  const safeImage = useCallback((u?: string | null) => {
     if (!u) return null;
     const s = String(u).trim();
     if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:')) return s;
     return null;
-  };
+  }, []);
 
+  /* ---------- filtering ---------- */
   const filtered = useMemo(() => {
     const qLower = q.trim().toLowerCase();
     return hires.filter((h) => {
@@ -236,17 +284,20 @@ export default function SearchHirePage() {
       if (province && h.province !== province) return false;
       if (city && h.city !== city) return false;
       if (!qLower) return true;
-      const fields = [h.profession, h.title, h.name, h.description, h.city, h.province].filter(Boolean).map(String);
+      const fields = [h.profession, h.title, h.name, h.description, h.city, h.province]
+        .filter(Boolean)
+        .map(String);
       return fields.some((f) => f.toLowerCase().includes(qLower));
     });
-  }, [hires, country, province, city, q]);
+  }, [hires, q, country, province, city]);
 
-  // عند تغيير العنصر المحدد، نعيد إنشاء الخريطة داخل الـ modal بضبط المفتاح
+  /* ---------- keep mapKey in sync with selected ---------- */
   useEffect(() => {
     if (!selected) return;
     setMapKey((k) => k + 1);
   }, [selected]);
 
+  /* ---------- Render ---------- */
   return (
     <main className="min-h-screen bg-[#071118] text-white antialiased relative">
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#071118] via-[#071827] to-[#021018]" />
@@ -267,7 +318,7 @@ export default function SearchHirePage() {
                 placeholder="مثال: مطور ويب، سائق..."
                 className="flex-1 px-4 py-2 rounded-lg bg-[#0f1721] border border-white/6 focus:border-cyan-400 outline-none transition"
               />
-              <button className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white font-medium">بحث</button>
+              <button onClick={() => { /* زر بحث بسيط يعيد تطبيق الفلتر */ }} className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white font-medium">بحث</button>
             </div>
           </div>
         </header>
@@ -321,10 +372,7 @@ export default function SearchHirePage() {
                     <article onClick={() => { setSelected(h); setMapKey((k) => k + 1); }} className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-4 flex items-center gap-4 transition">
                       <div className="w-14 h-14 rounded-md overflow-hidden bg-gray-800 flex items-center justify-center flex-shrink-0">
                         {image ? (
-                          <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={image} alt={h.profession ?? h.title ?? 'صورة'} className="w-full h-full object-cover" />
-                          </>
+                          <Image src={image} alt={h.profession ?? h.title ?? 'صورة'} width={56} height={56} className="object-cover" unoptimized />
                         ) : (
                           <div className="text-xs text-white/60 px-2 text-center">لا صورة</div>
                         )}
@@ -334,6 +382,13 @@ export default function SearchHirePage() {
                         <div className="flex items-center justify-between gap-3">
                           <h3 className="text-sm sm:text-base font-semibold truncate">{h.profession ?? h.title ?? '—'}</h3>
                           <time className="text-xs text-white/60">{h.created_at ? new Date(h.created_at).toLocaleString() : ''}</time>
+                        </div>
+
+                        <div className="mt-2 text-sm text-slate-300 line-clamp-2">{h.description ?? ''}</div>
+
+                        <div className="mt-3 flex items-center gap-2">
+                          <button onClick={() => setSelected(h)} className="px-3 py-1 rounded bg-sky-600 text-sm">عرض</button>
+                          <button onClick={() => { navigator.clipboard?.writeText(h.phone ?? ''); setMessage('تم نسخ رقم الهاتف'); setTimeout(() => setMessage(null), 2000); }} className="px-3 py-1 rounded bg-white/6 text-sm">نسخ هاتف</button>
                         </div>
 
                         <div className="mt-2 flex items-center gap-3 text-xs text-white/60">
@@ -353,97 +408,116 @@ export default function SearchHirePage() {
             </ul>
           )}
         </section>
-      </div>
 
-      {/* Details modal */}
-      {selected && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
-
-          <div className="relative max-w-4xl w-full bg-[#061017] border border-white/6 rounded-lg overflow-hidden shadow-xl z-10">
-            <div className="flex items-start justify-between p-4 border-b border-white/6">
-              <div>
-                <h2 className="text-lg font-bold">{selected.title ?? selected.profession ?? '—'}</h2>
-                <p className="text-sm text-white/70">{selected.name ?? '—'}</p>
-              </div>
-              <button onClick={() => setSelected(null)} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded">✕</button>
+        <section className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <aside className="md:col-span-1 space-y-3">
+            <div className="bg-[#021617] border border-white/6 rounded p-3">
+              <h3 className="text-sm font-semibold mb-2">إحصائيات</h3>
+              <div className="text-sm text-slate-300">العروض: <span className="font-medium">{hires.length}</span></div>
+              <div className="text-sm text-slate-300 mt-1">مفلترة: <span className="font-medium">{filtered.length}</span></div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-              <div className="space-y-2">
-                {safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) ? (
-                  <div className="w-full h-56 rounded-md border border-white/6 bg-[#07171b] flex items-center justify-center overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) as string}
-                      alt="صورة المنشور"
-                      className="max-w-full max-h-full object-contain"
-                      style={{ display: 'block' }}
-                    />
-                  </div>
-                ) : (
-                  <div className="w-full h-56 bg-[#07171b] rounded-md border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
-                )}
-
-                <div className="text-sm text-white/70">
-                  <p><strong>المهنة المطلوبة: </strong>{selected.profession ?? selected.title ?? '—'}</p>
-                  <p className="mt-2"><strong>الوصف: </strong>{selected.description ?? '—'}</p>
-                </div>
-
-                <div className="space-y-2 mt-3">
-                  <div className="text-sm text-white/70"><strong>الهاتف:</strong> {selected.phone ?? '—'}</div>
-                  <div className="text-sm text-white/70"><strong>الراتب او الاجور:</strong> {selected.salary ?? '—'}</div>
-                  <div className="text-sm text-white/70"><strong>عدد ساعات العمل في اليوم:</strong> {selected.hours ?? '—'}</div>
-                  <div className="text-sm text-white/70"><strong>مكان العمل:</strong> {selected.job_location ?? '—'}</div>
-                  <div className="text-sm text-white/70"><strong>الدولة:</strong> {selected.country ?? '—'}</div>
-                  <div className="text-sm text-white/70"><strong>المحافظة:</strong> {selected.province ?? '—'}</div>
-                  <div className="text-sm text-white/70"><strong>المدينة:</strong> {selected.city ?? '—'}</div>
-                  <div className="text-sm text-white/70"><strong>الحالة:</strong> {selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : 'بانتظار'}</div>
-                  <div className="text-sm text-white/70"><strong>تاريخ النشر:</strong> {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</div>
-                </div>
-              </div>
-
-              <div className="h-64 lg:h-full bg-black rounded-md overflow-hidden border border-white/6">
-                {parseLocation(selected.location) ? (
-                  <MapContainer
-                    key={mapKey}
-                    center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
-                    zoom={13}
-                    style={{ height: '100%', width: '100%' }}
-                    scrollWheelZoom={false}
-                  >
-                    <TileLayer
-                      attribution="&copy; OpenStreetMap contributors"
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <Marker position={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}>
-                      <Popup>
-                        {selected.profession ?? selected.title ?? 'موقع'} <br /> {selected.location}
-                      </Popup>
-                    </Marker>
-                  </MapContainer>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/60 px-4">
-                    لا توجد إحداثيات صالحة لعرض الخريطة
-                  </div>
-                )}
-              </div>
+            <div className="bg-[#021617] border border-white/6 rounded p-3">
+              <h3 className="text-sm font-semibold mb-2">خيارات</h3>
+              <button onClick={() => { setQ(''); setCountry(''); setProvince(''); setCity(''); }} className="px-3 py-1 rounded bg-white/6 text-sm">مسح الفلاتر</button>
+              <button onClick={() => fetchHires()} className="ml-2 px-3 py-1 rounded bg-cyan-600 text-sm">تحديث</button>
             </div>
+          </aside>
 
-            <div className="flex items-center justify-end gap-2 p-4 border-t border-white/6">
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? ''))}`}
-                target="_blank"
-                rel="noreferrer"
-                className="px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700"
-              >
-                افتح في الخرائط
-              </a>
-              <button onClick={() => setSelected(null)} className="px-4 py-2 rounded-md bg-white/6">إغلاق</button>
+          <div className="md:col-span-2" />
+        </section>
+
+        {/* Details modal */}
+        {selected && (
+          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
+
+            <div className="relative max-w-4xl w-full bg-[#061017] border border-white/6 rounded-lg overflow-hidden shadow-xl z-10">
+              <div className="flex items-start justify-between p-4 border-b border-white/6">
+                <div>
+                  <h2 className="text-lg font-bold">{selected.title ?? selected.profession ?? '—'}</h2>
+                  <p className="text-sm text-white/70">{selected.name ?? '—'}</p>
+                </div>
+                <button onClick={() => setSelected(null)} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded">✕</button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+                <div className="space-y-2">
+                  {safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) ? (
+                    <div className="w-full h-56 rounded-md border border-white/6 bg-[#07171b] flex items-center justify-center overflow-hidden">
+                      <Image
+                        src={String(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null))}
+                        alt="صورة المنشور"
+                        width={1200}
+                        height={675}
+                        className="max-w-full max-h-full object-contain"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-56 bg-[#07171b] rounded-md border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
+                  )}
+
+                  <div className="text-sm text-white/70">
+                    <p><strong>المهنة المطلوبة: </strong>{selected.profession ?? selected.title ?? '—'}</p>
+                    <p className="mt-2"><strong>الوصف: </strong>{selected.description ?? '—'}</p>
+
+                    <div className="space-y-2 mt-3">
+                      <div className="text-sm text-white/70"><strong>الهاتف:</strong> {selected.phone ?? '—'}</div>
+                      <div className="text-sm text-white/70"><strong>الراتب او الاجور:</strong> {selected.salary ?? '—'}</div>
+                      <div className="text-sm text-white/70"><strong>عدد ساعات العمل في اليوم:</strong> {selected.hours ?? '—'}</div>
+                      <div className="text-sm text-white/70"><strong>مكان العمل:</strong> {selected.job_location ?? '—'}</div>
+                      <div className="text-sm text-white/70"><strong>الدولة:</strong> {selected.country ?? '—'}</div>
+                      <div className="text-sm text-white/70"><strong>المحافظة:</strong> {selected.province ?? '—'}</div>
+                      <div className="text-sm text-white/70"><strong>المدينة:</strong> {selected.city ?? '—'}</div>
+                      <div className="text-sm text-white/70"><strong>الحالة:</strong> {selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : 'بانتظار'}</div>
+                      <div className="text-sm text-white/70"><strong>تاريخ النشر:</strong> {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-64 lg:h-full bg-black rounded-md overflow-hidden border border-white/6">
+                  {parseLocation(selected.location) ? (
+                    <MapContainer
+                      key={mapKey}
+                      center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
+                      zoom={13}
+                      style={{ height: '100%', width: '100%' }}
+                      scrollWheelZoom={false}
+                    >
+                      <TileLayer
+                        attribution="&copy; OpenStreetMap contributors"
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      <Marker position={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}>
+                        <Popup>
+                          {selected.profession ?? selected.title ?? 'موقع'} <br /> {selected.location}
+                        </Popup>
+                      </Marker>
+                    </MapContainer>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white/60 px-4">
+                      لا توجد إحداثيات صالحة لعرض الخريطة
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 p-4 border-t border-white/6">
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? ''))}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700"
+                >
+                  افتح في الخرائط
+                </a>
+                <button onClick={() => setSelected(null)} className="px-4 py-2 rounded-md bg-white/6">إغلاق</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </main>
   );
 }
