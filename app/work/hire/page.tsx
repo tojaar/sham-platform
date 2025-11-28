@@ -4,12 +4,16 @@
 
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { supabase } from '@/lib/supabase';
 import 'leaflet/dist/leaflet.css';
 
 const MapPicker = dynamic(() => import('@/components/MapPicker'), { ssr: false });
 
 const IMGBB_KEY = process.env.NEXT_PUBLIC_IMGBB_KEY ?? '';
+
+async function getSupabase() {
+  const mod = await import('@/lib/supabase');
+  return mod.supabase;
+}
 
 async function uploadToImgBB(file: File): Promise<string | null> {
   if (!IMGBB_KEY) {
@@ -170,11 +174,12 @@ export default function HireForm() {
         image_url: imageUrl,
       };
 
+      const supabase = await getSupabase();
       const { error } = await supabase.from('hire_requests').insert([payload]);
 
       if (error) {
         console.error('❌ Supabase insert error:', error);
-        alert('❌ فشل إرسال الإعلان: ' + error.message);
+        alert('❌ فشل إرسال الإعلان: ' + (error.message ?? String(error)));
       } else {
         alert('📨 تم إرسال إعلان الوظيفة بنجاح');
         setForm({
@@ -257,6 +262,7 @@ export default function HireForm() {
             className="p-2 rounded bg-gray-800 border border-green-500 text-white"
           />
           {previewUrl && (
+            // نستخدم img هنا لأن الصورة محلية من createObjectURL
             <img src={previewUrl} alt="preview" className="mt-2 rounded max-h-48 object-cover" />
           )}
           {form.image_url && !previewUrl && (
