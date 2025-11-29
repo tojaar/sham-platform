@@ -131,7 +131,7 @@ export default function ProducerRegisterPage() {
       }
 
       if ((j as { ok?: boolean }).ok) {
-        setSuccess('تم إنشاء الطلب بنجاح. سنراجع الطلب خلال 24 ساعة.');
+        setSuccess('تم إنشاء الطلب بنجاح. سنراجع الطلب قريباً.');
         resetForm();
         setSelectedPayment(null);
       } else {
@@ -154,8 +154,8 @@ export default function ProducerRegisterPage() {
     const rect = el.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const px = (x / rect.width) - 0.5;
-    const py = (y / rect.height) - 0.5;
+    const px = x / rect.width - 0.5;
+    const py = y / rect.height - 0.5;
     const rotateX = (-py * 6).toFixed(2);
     const rotateY = (px * 6).toFixed(2);
     el.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(0);`
@@ -185,15 +185,13 @@ export default function ProducerRegisterPage() {
   const togglePayment = (method: 'sham' | 'usdt') => {
     setSelectedPayment((prev) => {
       const next = prev === method ? null : method;
-      // enforce field visibility/clearing
       setForm((s) => {
         if (next === 'sham') {
-          return { ...s, usdtTrc20: '', usdtTxid: '' }; // close/clear USDT fields
+          return { ...s, usdtTrc20: '', usdtTxid: '' };
         }
         if (next === 'usdt') {
-          return { ...s, shamCashLink: '', shamPaymentCode: '' }; // close/clear Sham fields
+          return { ...s, shamCashLink: '', shamPaymentCode: '' };
         }
-        // if deselecting, keep fields as-is (already cleared above when selecting)
         return s;
       });
       return next;
@@ -212,10 +210,10 @@ export default function ProducerRegisterPage() {
           </div>
 
           <h1 className="mt-6 text-3xl sm:text-4xl font-extrabold leading-tight text-white">
-            انضم الآن وابدأ الربح بثقة
+            انضم الآن وابدأ البيع بثقة
           </h1>
           <p className="mt-2 text-sm text-white/70 max-w-xl mx-auto px-4">
-            سجل كعضو منتج للوصول إلى بياناتك وتحقيق ارباح عالية  ودعم مخصص. تجربة سريعة وآمنة على الهاتف.
+            سجل كعضو منتج للوصول إلى أدوات البيع، إدارة الطلبات، ودعم مخصص. تجربة سريعة وآمنة على الهاتف.
           </p>
         </header>
 
@@ -244,13 +242,13 @@ export default function ProducerRegisterPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-lg font-bold text-white">إنشاء حساب دولي</h2>
+                    <h2 className="text-lg font-bold text-white">إنشاء حساب منتج</h2>
                     <p className="text-xs text-white/60 mt-1">ابدأ بملء بياناتك الأساسية — العملية سريعة ومحمية</p>
                   </div>
 
                   <div className="hidden sm:flex items-center gap-2">
-                    <div className="text-xs text-white/60">شركة تجار العالمية </div>
-                    <div className="px-3 py-1 rounded-full bg-amber-400 text-black text-xs font-semibold">  tojar</div>
+                    <div className="text-xs text-white/60">خطة تجريبية</div>
+                    <div className="px-3 py-1 rounded-full bg-amber-400 text-black text-xs font-semibold">مجاناً 7 أيام</div>
                   </div>
                 </div>
 
@@ -340,7 +338,7 @@ export default function ProducerRegisterPage() {
                       <input
                         value={form.shamPaymentCode}
                         onChange={(e) => onChange('shamPaymentCode', e.target.value)}
-                        placeholder="رمز دفع شام (مثال: CODE123)"
+                        placeholder="رمز دفع شام"
                         className="w-full p-3 rounded-lg bg-[#06121a] border border-white/6 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-amber-400"
                       />
                     </>
@@ -467,7 +465,7 @@ export default function ProducerRegisterPage() {
                 <li>سجّل الدخول إلى حساب شام كاش أو أنشئ حسابًا جديدًا إذا لزم.</li>
                 <li>اتبع خطوات الدفع وأدخل المبلغ المطلوب.</li>
                 <li>بعد إتمام الدفع، احتفظ بصورة الإيصال أو رمز الدفع للرجوع إليه.</li>
-                <li>ارجع إلى نموذج التسجيل وأدخل رمز الدفع في حقل "رمز دفع شام" إن رغبت.</li>
+                <li>ارجع إلى نموذج التسجيل وأدخل رمز الدفع في حقل رمز دفع شام إن رغبت.</li>
               </ol>
             </div>
           )}
@@ -503,7 +501,7 @@ export default function ProducerRegisterPage() {
                 <li>تأكد من اختيار شبكة TRC20 قبل إرسال USDT.</li>
                 <li>أدخل المبلغ المطلوب وأكد المعاملة.</li>
                 <li>انتظر تأكيد الشبكة ثم انسخ TXID أو رقم المعاملة.</li>
-                <li>ارجع إلى نموذج التسجيل وأدخل TXID في حقل "معرف الدفع TXID".</li>
+                <li>ارجع إلى نموذج التسجيل وأدخل TXID في حقل معرف الدفع TXID.</li>
               </ol>
             </div>
           )}
