@@ -167,11 +167,11 @@ export default function ProducerRegisterPage() {
     el.style.transform = 'rotateX(0deg) rotateY(0deg)';
   };
 
-  // copy to clipboard helper
+  // copy to clipboard helper — shows "تم النسخ" on success
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setSuccess('تم نسخ الرابط إلى الحافظة');
+      setSuccess('تم النسخ');
       setTimeout(() => setSuccess(null), 2000);
     } catch {
       setError('فشل نسخ الرابط');
@@ -449,14 +449,6 @@ export default function ProducerRegisterPage() {
                   >
                     نسخ الرابط
                   </button>
-                  <a
-                    href={SHAM_LINK}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1 rounded bg-amber-400 text-black font-semibold text-sm"
-                  >
-                    افتح الرابط
-                  </a>
                 </div>
               </div>
 
@@ -485,14 +477,6 @@ export default function ProducerRegisterPage() {
                   >
                     نسخ الرابط
                   </button>
-                  <a
-                    href={USDT_LINK}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1 rounded bg-cyan-500 text-black font-semibold text-sm"
-                  >
-                    افتح الرابط
-                  </a>
                 </div>
               </div>
 
