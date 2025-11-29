@@ -81,7 +81,7 @@ export default function HomePage() {
           </Link>
 
           <Link
-            href="/Merchant"
+            href="/merchant"
             className="group flex items-center gap-3 bg-green-100 hover:bg-green-200 p-4 rounded-lg shadow transition"
           >
             <span className="text-green-600 text-xl group-hover:scale-110 transition-transform">
