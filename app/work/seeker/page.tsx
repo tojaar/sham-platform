@@ -101,23 +101,15 @@ function Field(props: {
 }) {
   const { icon, placeholder, value, onChange, type = 'text' } = props;
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
+    <label className="field">
+      <div className="field-row">
+        {icon && <span className="field-icon">{icon}</span>}
         <input
           type={type}
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          style={{
-            flex: 1,
-            padding: '10px 12px',
-            borderRadius: 10,
-            border: '1px solid rgba(245,158,11,0.9)',
-            background: '#fff',
-            fontSize: 14,
-            outline: 'none',
-          }}
+          className="field-input"
         />
       </div>
     </label>
@@ -278,43 +270,184 @@ export default function SeekerForm() {
   return (
     <main
       ref={containerRef}
-      style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(180deg, #0f172a 0%, #071021 50%, #021018 100%)',
-        padding: 20,
-        fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial",
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'flex-start',
-      }}
+      className="page-root"
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 920,
-          margin: '24px 12px',
-          display: 'grid',
-          gridTemplateColumns: '1fr',
-          gap: 18,
-        }}
-      >
+      <style>{`
+        :root{
+          --bg-1: #0f172a;
+          --bg-2: #071021;
+          --accent: #f59e0b;
+          --accent-2: #06b6d4;
+          --card-bg: #ffffff;
+          --muted: #64748b;
+          --success: #06b6d4;
+        }
+
+        .page-root{
+          min-height:100vh;
+          background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 50%, #021018 100%);
+          padding: 20px;
+          font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+          display:flex;
+          justify-content:center;
+          align-items:flex-start;
+        }
+
+        .container{
+          width:100%;
+          max-width:920px;
+          margin:24px 12px;
+          display:grid;
+          grid-template-columns:1fr;
+          gap:18px;
+        }
+
+        .header{
+          color:#fff;
+          text-align:center;
+          padding:18px 12px;
+          border-radius:14px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+          border:1px solid rgba(255,255,255,0.04);
+          box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+        }
+
+        .brand-pill{
+          display:inline-flex;
+          align-items:center;
+          gap:10px;
+          padding:6px 12px;
+          border-radius:999px;
+          background: rgba(255,255,255,0.02);
+        }
+
+        .card{
+          background: var(--card-bg);
+          border-radius:16px;
+          padding:18px;
+          box-shadow: 0 12px 40px rgba(2,6,23,0.6);
+          border: 2px solid rgba(245,158,11,0.12);
+          display:flex;
+          flex-direction:column;
+          gap:12px;
+        }
+
+        form{ display:grid; gap:12px; }
+
+        .grid-2{
+          display:grid;
+          gap:10px;
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .grid-2 .field{ margin:0; }
+
+        .field{ display:flex; flex-direction:column; gap:6px; }
+        .field-row{ display:flex; gap:8px; align-items:center; }
+        .field-icon{ font-size:18px; }
+        .field-input{
+          flex:1;
+          padding:10px 12px;
+          border-radius:10px;
+          border:1px solid rgba(245,158,11,0.9);
+          background:#fff;
+          font-size:14px;
+          outline:none;
+        }
+        .field-input:focus{ box-shadow: 0 6px 18px rgba(6,182,212,0.06); border-color: var(--accent-2); }
+
+        .map-box{ height:220px; border-radius:12px; overflow:hidden; border:1px solid rgba(2,6,23,0.06); }
+
+        .payment-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+        .pay-btn{
+          padding:10px 14px;
+          border-radius:10px;
+          background:transparent;
+          color:var(--muted);
+          border:1px solid rgba(2,6,23,0.06);
+          font-weight:700;
+          cursor:pointer;
+          flex:1 1 auto;
+        }
+        .pay-btn.active-sham{ background: var(--accent); color:#000; border:none; }
+        .pay-btn.active-usdt{ background: var(--accent-2); color:#000; border:none; }
+
+        .copy-btn{
+          padding:8px 10px;
+          border-radius:8px;
+          background:#fff;
+          border:1px solid rgba(2,6,23,0.06);
+          cursor:pointer;
+          font-size:13px;
+          font-weight:700;
+        }
+
+        .payment-panel{
+          border-radius:10px;
+          padding:12px;
+          margin-top:6px;
+        }
+        .payment-panel.sham{ background:#fff8ed; border:1px solid rgba(245,158,11,0.12); color:#7c2d12; }
+        .payment-panel.usdt{ background:#ecfeff; border:1px solid rgba(6,182,212,0.12); color:#064e3b; }
+
+        .actions{ display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+        .primary-btn{
+          padding:10px 16px;
+          border-radius:10px;
+          background: linear-gradient(90deg,#06b6d4,#3b82f6);
+          color:#000;
+          font-weight:700;
+          border:none;
+          box-shadow: 0 8px 20px rgba(59,130,246,0.18);
+          cursor:pointer;
+          flex:1 1 auto;
+        }
+        .secondary-btn{
+          padding:10px 14px;
+          border-radius:10px;
+          background:transparent;
+          border:1px solid rgba(2,6,23,0.06);
+          color:#0f172a;
+          font-weight:600;
+          cursor:pointer;
+        }
+
+        .submit-row{ display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+
+        .notice{
+          padding:10px;
+          border-radius:8px;
+          background: rgba(6,182,212,0.06);
+          color:#0369a1;
+          font-size:13px;
+        }
+
+        .footer{ color:#fff; text-align:center; padding:12px 8px; font-size:13px; }
+
+        /* Mobile adjustments */
+        @media (max-width: 720px){
+          .grid-2{ grid-template-columns: 1fr; }
+          .payment-row{ flex-direction:column; align-items:stretch; }
+          .copy-btn{ width:100%; }
+          .pay-btn{ width:100%; }
+          .actions{ flex-direction:column; align-items:stretch; }
+          .primary-btn{ width:100%; }
+          .submit-row{ justify-content:stretch; flex-direction:column-reverse; }
+          .map-box{ height:200px; }
+          .card{ padding:14px; border-radius:12px; }
+          .header{ padding:14px; border-radius:12px; }
+        }
+      `}</style>
+
+      <div className="container">
         {/* Header */}
-        <section
-          style={{
-            color: '#fff',
-            textAlign: 'center',
-            padding: '18px 12px',
-            borderRadius: 14,
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01))',
-            border: '1px solid rgba(255,255,255,0.04)',
-            boxShadow: '0 8px 30px rgba(2,6,23,0.6)',
-          }}
-        >
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '6px 12px', borderRadius: 999, background: 'rgba(255,255,255,0.02)' }}>
+        <section className="header">
+          <div className="brand-pill" aria-hidden>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ color: '#f59e0b' }}>
               <path d="M12 2l3 6 6 .5-4.5 3.8L18 20l-6-3.5L6 20l1.5-7.7L3 8.5 9 8 12 2z" fill="currentColor" />
             </svg>
-            <div style={{ fontSize: 14, color: '#fff', opacity: 0.9 }}>نموذج الباحث عن عمل</div>
+            <div style={{ fontSize: 14, color: '#fff', opacity: 0.95 }}>نموذج الباحث عن عمل</div>
           </div>
 
           <h1 style={{ margin: '12px 0 6px', fontSize: 22, lineHeight: 1.05, fontWeight: 800 }}>سجل طلبك بسهولة — سنساعدك في العثور على فرص</h1>
@@ -324,20 +457,9 @@ export default function SeekerForm() {
         </section>
 
         {/* Card */}
-        <section
-          style={{
-            background: '#fff',
-            borderRadius: 16,
-            padding: 18,
-            boxShadow: '0 12px 40px rgba(2,6,23,0.6)',
-            border: '2px solid rgba(245,158,11,0.12)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-          }}
-        >
-          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12 }}>
-            <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
+        <section className="card">
+          <form onSubmit={handleSubmit}>
+            <div className="grid-2">
               <Field icon="👤" placeholder="الاسم الكامل" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
               <Field icon="📞" placeholder="رقم الهاتف واتساب" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
               <Field icon="🎂" placeholder="العمر" type="number" value={form.age} onChange={(v) => setForm({ ...form, age: v })} />
@@ -347,7 +469,7 @@ export default function SeekerForm() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
+            <div className="grid-2">
               <Field icon="🌍" placeholder="الدولة" value={form.country} onChange={(v) => setForm({ ...form, country: v })} />
               <Field icon="🏛" placeholder="المحافظة" value={form.province} onChange={(v) => setForm({ ...form, province: v })} />
               <Field icon="🏙" placeholder="المدينة" value={form.city} onChange={(v) => setForm({ ...form, city: v })} />
@@ -356,7 +478,7 @@ export default function SeekerForm() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <span style={{ fontWeight: 'bold', color: '#92400e' }}>📍 اختر الموقع من الخريطة</span>
-              <div style={{ height: 220, borderRadius: 8, overflow: 'hidden', border: '1px solid #fde68a' }}>
+              <div className="map-box">
                 <MapPicker
                   onSelect={(coords: { lat: number; lng: number } | null) => {
                     setLocation(coords ?? null);
@@ -368,20 +490,12 @@ export default function SeekerForm() {
             </div>
 
             {/* Payment method buttons */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="payment-row" aria-hidden={false}>
               <button
                 type="button"
                 onClick={() => togglePayment('sham')}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  background: selectedPayment === 'sham' ? '#f59e0b' : 'transparent',
-                  color: selectedPayment === 'sham' ? '#000' : '#0f172a',
-                  border: selectedPayment === 'sham' ? 'none' : '1px solid rgba(2,6,23,0.06)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  flex: '1 1 auto',
-                }}
+                className={`pay-btn ${selectedPayment === 'sham' ? 'active-sham' : ''}`}
+                aria-pressed={selectedPayment === 'sham'}
               >
                 دفع شام كاش
               </button>
@@ -389,24 +503,39 @@ export default function SeekerForm() {
               <button
                 type="button"
                 onClick={() => togglePayment('usdt')}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  background: selectedPayment === 'usdt' ? '#06b6d4' : 'transparent',
-                  color: selectedPayment === 'usdt' ? '#000' : '#0f172a',
-                  border: selectedPayment === 'usdt' ? 'none' : '1px solid rgba(2,6,23,0.06)',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  flex: '1 1 auto',
-                }}
+                className={`pay-btn ${selectedPayment === 'usdt' ? 'active-usdt' : ''}`}
+                aria-pressed={selectedPayment === 'usdt'}
               >
                 دفع USDT
               </button>
+
+              {/* copy link buttons are hidden until a method is selected; keep them available but visually subtle */}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(SHAM_LINK)}
+                  className="copy-btn"
+                  aria-hidden={selectedPayment !== 'sham'}
+                  style={{ opacity: selectedPayment === 'sham' ? 1 : 0.0, transition: 'opacity .18s ease' }}
+                >
+                  نسخ رابط شام
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(USDT_LINK)}
+                  className="copy-btn"
+                  aria-hidden={selectedPayment !== 'usdt'}
+                  style={{ opacity: selectedPayment === 'usdt' ? 1 : 0.0, transition: 'opacity .18s ease' }}
+                >
+                  نسخ رابط USDT
+                </button>
+              </div>
             </div>
 
             {/* Payment details: only visible after selecting a method */}
             {selectedPayment === 'sham' && (
-              <div style={{ background: '#fff8ed', borderRadius: 10, padding: 12, border: '1px solid rgba(245,158,11,0.12)' }}>
+              <div className="payment-panel sham" role="region" aria-label="شام كاش">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#92400e' }}>دفع شام كاش</div>
@@ -419,15 +548,7 @@ export default function SeekerForm() {
                     <button
                       type="button"
                       onClick={() => copyToClipboard(SHAM_LINK)}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 8,
-                        background: '#fff',
-                        border: '1px solid rgba(2,6,23,0.06)',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 700,
-                      }}
+                      className="copy-btn"
                     >
                       نسخ رابط شام
                     </button>
@@ -452,7 +573,7 @@ export default function SeekerForm() {
             )}
 
             {selectedPayment === 'usdt' && (
-              <div style={{ background: '#ecfeff', borderRadius: 10, padding: 12, border: '1px solid rgba(6,182,212,0.12)' }}>
+              <div className="payment-panel usdt" role="region" aria-label="USDT">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: '#065f46' }}>دفع USDT (TRC20)</div>
@@ -465,15 +586,7 @@ export default function SeekerForm() {
                     <button
                       type="button"
                       onClick={() => copyToClipboard(USDT_LINK)}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 8,
-                        background: '#fff',
-                        border: '1px solid rgba(2,6,23,0.06)',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 700,
-                      }}
+                      className="copy-btn"
                     >
                       نسخ رابط USDT
                     </button>
@@ -499,7 +612,7 @@ export default function SeekerForm() {
 
             {/* If no payment selected, show both fields (user may paste manually) */}
             {selectedPayment === null && (
-              <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
+              <div className="grid-2" aria-hidden={false}>
                 <Field icon="💳" placeholder="رمز الدفع شام كاش (10,000 ل.س)" value={form.paymentCode} onChange={(v) => setForm({ ...form, paymentCode: v })} />
                 <Field icon="🪙" placeholder="او معرف العمل USDT (TXID أو عنوان المحفظة)" value={form.transactionId} onChange={(v) => setForm({ ...form, transactionId: v })} />
               </div>
@@ -520,14 +633,13 @@ export default function SeekerForm() {
                 }}
               />
               {previewUrl && (
-                // Use next/image to avoid the lint warning about <img>
                 <div style={{ marginTop: 8, width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative', height: 220 }}>
                   <Image src={previewUrl} alt="preview" fill style={{ objectFit: 'cover' }} />
                 </div>
               )}
             </label>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+            <div className="submit-row">
               <button
                 type="button"
                 onClick={() => {
@@ -550,7 +662,7 @@ export default function SeekerForm() {
                   setLocation(null);
                   setSelectedPayment(null);
                 }}
-                style={{ padding: '10px 14px', borderRadius: 8, background: '#f3f4f6', border: 'none' }}
+                className="secondary-btn"
               >
                 إعادة تعيين
               </button>
@@ -558,14 +670,8 @@ export default function SeekerForm() {
               <button
                 type="submit"
                 disabled={loading}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 8,
-                  background: '#92400e',
-                  color: '#fff',
-                  border: 'none',
-                  fontWeight: 700,
-                }}
+                className="primary-btn"
+                aria-busy={loading}
               >
                 {loading ? 'جارٍ الإرسال...' : 'إرسال الطلب'}
               </button>
@@ -575,7 +681,7 @@ export default function SeekerForm() {
           {/* Notice area */}
           <div style={{ marginTop: 6 }}>
             {notice && (
-              <div style={{ padding: 10, borderRadius: 8, background: 'rgba(6,182,212,0.06)', color: '#0369a1', fontSize: 13 }}>
+              <div className="notice" role="status">
                 {notice}
               </div>
             )}
@@ -583,7 +689,7 @@ export default function SeekerForm() {
         </section>
 
         {/* Footer / Help */}
-        <section style={{ color: '#fff', textAlign: 'center', padding: '12px 8px', fontSize: 13 }}>
+        <section className="footer">
           <div>هل تحتاج مساعدة؟ تواصل معنا عبر الواتساب بعد إرسال الطلب.</div>
           <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>نحترم خصوصيتك ونحافظ على بياناتك.</div>
         </section>
