@@ -1,8 +1,9 @@
-// app/seeker/form/page.tsx
+// app/work/seeker/page.tsx
 'use client';
 
 import React, { useCallback, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
 
 /**
@@ -434,9 +435,9 @@ export default function SeekerForm() {
                 </div>
 
                 <ol style={{ marginTop: 10, paddingLeft: 18, color: '#7c2d12', fontSize: 13 }}>
-                  <li>انسخ رابط شام بالضغط على "نسخ رابط شام".</li>
+                  <li>انسخ رابط شام بالضغط على زر نسخ رابط شام.</li>
                   <li>افتح الرابط في متصفحك أو تطبيق شام كاش واتبع خطوات الدفع.</li>
-                  <li>بعد إتمام الدفع انسخ رمز الدفع أو رقم الإيصال وأدخله في حقل "رمز الدفع شام كاش".</li>
+                  <li>بعد إتمام الدفع انسخ رمز الدفع أو رقم الإيصال وأدخله في حقل رمز الدفع شام كاش.</li>
                 </ol>
 
                 <div style={{ marginTop: 12 }}>
@@ -480,9 +481,9 @@ export default function SeekerForm() {
                 </div>
 
                 <ol style={{ marginTop: 10, paddingLeft: 18, color: '#064e3b', fontSize: 13 }}>
-                  <li>انسخ رابط USDT بالضغط على "نسخ رابط USDT".</li>
+                  <li>انسخ رابط USDT بالضغط على زر نسخ رابط USDT.</li>
                   <li>افتح محفظتك، تأكد من اختيار شبكة TRC20، وأرسل المبلغ إلى العنوان المطلوب.</li>
-                  <li>بعد تأكيد المعاملة انسخ TXID وأدخله في حقل "معرف الدفع TXID".</li>
+                  <li>بعد تأكيد المعاملة انسخ TXID وأدخله في حقل معرف الدفع TXID.</li>
                 </ol>
 
                 <div style={{ marginTop: 12 }}>
@@ -519,7 +520,10 @@ export default function SeekerForm() {
                 }}
               />
               {previewUrl && (
-                <img src={previewUrl} alt="preview" style={{ marginTop: 8, width: '100%', borderRadius: 8, objectFit: 'cover' }} />
+                // Use next/image to avoid the lint warning about <img>
+                <div style={{ marginTop: 8, width: '100%', borderRadius: 8, overflow: 'hidden', position: 'relative', height: 220 }}>
+                  <Image src={previewUrl} alt="preview" fill style={{ objectFit: 'cover' }} />
+                </div>
               )}
             </label>
 
