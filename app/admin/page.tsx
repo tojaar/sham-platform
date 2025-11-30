@@ -1,10 +1,12 @@
+// app/admin/page.tsx
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
-export default function adminForm() {
+export default function AdminForm() {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -34,8 +36,17 @@ export default function adminForm() {
           <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-4">
               {/* شعار الشركة من public/assets/tojar.* */}
-              {/* استخدمت عنصر img بسيط لسهولة الاستخدام؛ تأكد من امتداد الملف (png/jpg/svg) في المسار */}
-              <img src="/assets/tojar.png" alt="Tojar" className="w-20 h-20 object-contain rounded-md shadow-sm bg-white/5 p-1 hidden sm:block" />
+              <div className="hidden sm:block">
+                <Image
+                  src="/assets/tojar.png"
+                  alt="Tojar"
+                  width={80}
+                  height={80}
+                  className="w-20 h-20 object-contain rounded-md shadow-sm bg-white/5 p-1"
+                  priority
+                />
+              </div>
+
               <div>
                 <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">لوحة الادارة</h1>
                 <p className="mt-2 text-sm text-white/70 max-w-xl">اختَر لوحة الإدارة التي تريد الدخول إليها. سهولة، سرعة، وتحكم كامل.</p>
