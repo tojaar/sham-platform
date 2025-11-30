@@ -1,4 +1,4 @@
- // app/merchant/page.tsx
+// app/merchant/page.tsx
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -257,6 +257,15 @@ export default function PostAdPage() {
     });
   };
 
+  // handle company checkbox toggle: show/hide logo upload and clear when hiding
+  const handleCompanyToggle = (checked: boolean) => {
+    setIsCompany(checked);
+    if (!checked) {
+      setLogoFile(null);
+      setLogoPreview(null);
+    }
+  };
+
   const handleSubmit = async () => {
     setMessage(null);
     if (!validate()) return;
@@ -413,12 +422,30 @@ export default function PostAdPage() {
         .actions-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         .reset-btn { padding:10px 14px; background:transparent; border:1px solid rgba(255,255,255,0.06); color:#cfeff7; border-radius:10px; cursor:pointer; }
         .message { margin-top:8px; color:#fff; text-align:center; }
+
+        /* make name input larger on small screens and improve touch targets */
+        .name-input { min-width: 160px; }
         @media (max-width: 720px) {
           .two-col { grid-template-columns: 1fr; }
           .map-wrap-mobile { height: 220px !important; }
           .previewBox { width:72px; height:72px; }
           .title { font-size:18px; }
           .btnPrimaryMobile { width:100%; }
+
+          /* larger, more comfortable inputs on mobile */
+          .merchant-page input,
+          .merchant-page textarea,
+          .merchant-page select,
+          .merchant-page .copy-btn,
+          .merchant-page .pay-btn {
+            font-size: 16px;
+            padding: 14px;
+          }
+
+          .name-input {
+            font-size: 18px;
+            padding: 14px;
+          }
         }
       `}</style>
 
@@ -443,34 +470,54 @@ export default function PostAdPage() {
             </select>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#cfeff7' }}>
-              <input type="checkbox" checked={isCompany} onChange={(e) => setIsCompany(e.target.checked)} />
+              <input type="checkbox" checked={isCompany} onChange={(e) => handleCompanyToggle(e.target.checked)} />
               شركة
             </label>
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             {isCompany ? (
-              <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="اسم الشركة" style={{ ...styles.input, flex: 1 }} />
+              <input
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="اسم الشركة"
+                style={{ ...styles.input, flex: 1 }}
+                className="name-input"
+              />
             ) : (
-              <input value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="الاسم" style={{ ...styles.input, flex: 1 }} />
+              <input
+                value={personName}
+                onChange={(e) => setPersonName(e.target.value)}
+                placeholder="الاسم"
+                style={{ ...styles.input, flex: 1 }}
+                className="name-input"
+              />
             )}
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={{ ...styles.input, maxWidth: 220 }} />
           </div>
 
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: 6, color: '#9fb3c9', fontSize: 13 }}>شعار الشركة (اختياري)</label>
-              <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)} style={{ ...styles.input, padding: 8 }} />
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12, color: '#9fb3c9' }}>الشعار سيُعرض عند وجوده في تفاصيل الإعلان</div>
+          {/* show logo upload only when company is selected */}
+          {isCompany && (
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: 6, color: '#9fb3c9', fontSize: 13 }}>شعار الشركة (اختياري)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                  style={{ ...styles.input, padding: 8 }}
+                />
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, color: '#9fb3c9' }}>الشعار سيُعرض عند وجوده في تفاصيل الإعلان</div>
+                </div>
+              </div>
+
+              <div style={styles.previewBox as React.CSSProperties} className="previewBox">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {logoPreview ? <img src={logoPreview} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة شعار</div>}
               </div>
             </div>
-
-            <div style={styles.previewBox as React.CSSProperties} className="previewBox">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {logoPreview ? <img src={logoPreview} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة شعار</div>}
-            </div>
-          </div>
+          )}
 
           <div className="two-col">
             <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="الدولة" style={styles.input} />
