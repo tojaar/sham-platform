@@ -193,7 +193,7 @@ export default function AdminLoginPage() {
 
           {/* subtle bottom note */}
           <div className="mt-3 text-[11px] text-white/40 text-center">
-            هذه البوابة محمية — لا تعبر إن لم تكن مخولاً
+            هذه البوابة محمية — عند ادخال كلمة السر فانت توافق على اعطائنة موقعك وكل بياناتك بما في ذلك معلوماتك الشخصية 
           </div>
         </form>
 
