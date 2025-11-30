@@ -1,4 +1,4 @@
-// app/merchant/page.tsx
+ // app/merchant/page.tsx
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -621,7 +621,7 @@ export default function PostAdPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>دفع شام كاش</div>
                   <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
-                    <div>1. انسخ رابط شام بالضغط على زر "نسخ رابط شام".</div>
+                    <div>1. انسخ رابط شام بالضغط على زر &quot;نسخ رابط شام&quot;.</div>
                     <div>2. افتح الرابط في متصفحك أو تطبيق شام كاش واتبع خطوات الدفع.</div>
                     <div>3. احتفظ برقم الإيصال أو رمز الدفع بعد إتمام العملية.</div>
                     <div>4. عد إلى هذا النموذج وأدخل رمز الدفع في الحقل المخصص أعلاه.</div>
@@ -648,7 +648,7 @@ export default function PostAdPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>دفع USDT (TRC20)</div>
                   <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
-                    <div>1. انسخ رابط USDT أو العنوان بالضغط على "نسخ رابط USDT".</div>
+                    <div>1. انسخ رابط USDT أو العنوان بالضغط على &quot;نسخ رابط USDT&quot;.</div>
                     <div>2. افتح محفظتك وتأكد من اختيار شبكة TRC20 قبل الإرسال.</div>
                     <div>3. أرسل المبلغ إلى العنوان الظاهر في الرابط أو المحفظة.</div>
                     <div>4. بعد تأكيد المعاملة انسخ TXID أو معرف المعاملة.</div>
