@@ -58,7 +58,7 @@ const uploadToImgbb = async (file: File | null): Promise<string | null> => {
   form.append('key', key);
   form.append('image', base64);
   const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: form });
-  const json = await res.json();
+  const json = await res.json().catch(() => null);
   if (!res.ok || !json?.data?.url) throw new Error(json?.error?.message ?? 'فشل رفع الصورة');
   return json.data.url as string;
 };
@@ -100,6 +100,13 @@ export default function PostAdPage() {
   const [leafletReady, setLeafletReady] = useState(false);
   const leafletRef = useRef<LeafletAPI | null>(null);
   const mapRef = useRef<unknown>(null);
+
+  // payment selection state (null | 'sham' | 'usdt')
+  const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
+
+  // sample payment links (replace with real links)
+  const SHAM_LINK = 'https://shamcash.example.com/pay/ABC123';
+  const USDT_LINK = 'https://usdt.example.com/tx/0xDEADBEEF';
 
   useEffect(() => {
     if (imageFile) {
@@ -210,7 +217,7 @@ export default function PostAdPage() {
       setMessage('الرجاء كتابة الاسم');
       return false;
     }
-    if (!country.trim() || !province.trim() || !city.trim()) {
+    if (!country.trim() && !province.trim() && !city.trim()) {
       setMessage('الرجاء تزويد الدولة والمحافظة والمدينة');
       return false;
     }
@@ -223,6 +230,31 @@ export default function PostAdPage() {
       return false;
     }
     return true;
+  };
+
+  // copy to clipboard helper (used by payment buttons)
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage('تم النسخ');
+      setTimeout(() => setMessage(null), 2000);
+    } catch {
+      setMessage('فشل النسخ');
+      setTimeout(() => setMessage(null), 2000);
+    }
+  };
+
+  // toggle payment selection and clear the other field
+  const togglePayment = (method: 'sham' | 'usdt') => {
+    setSelectedPayment((prev) => {
+      const next = prev === method ? null : method;
+      if (next === 'sham') {
+        setPaymentId(''); // clear USDT
+      } else if (next === 'usdt') {
+        setPaymentCode(''); // clear Sham
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async () => {
@@ -292,6 +324,7 @@ export default function PostAdPage() {
       setPaymentId('');
       setImagePreview(null);
       setLogoPreview(null);
+      setSelectedPayment(null);
     } catch (err) {
       console.error(err);
       const msg = (err as { message?: string })?.message ?? String(err);
@@ -305,25 +338,26 @@ export default function PostAdPage() {
     page: {
       minHeight: '100vh',
       background: 'linear-gradient(180deg,#071226 0%, #08263a 100%)',
-      padding: '20px',
+      padding: '18px',
       fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial',
-      color: '#0b1220',
+      color: '#e6eef8',
     } as React.CSSProperties,
     container: {
-      maxWidth: 820,
+      maxWidth: 920,
       margin: '0 auto',
-      background: '#0f1724',
-      borderRadius: 14,
-      padding: 18,
-      boxShadow: '0 8px 30px rgba(2,6,23,0.6)',
+      background: 'linear-gradient(180deg,#0b1724,#071226)',
+      borderRadius: 16,
+      padding: 20,
+      boxShadow: '0 12px 40px rgba(2,6,23,0.6)',
       color: '#e6eef8',
+      border: '1px solid rgba(255,255,255,0.03)',
     } as React.CSSProperties,
     input: {
       width: '100%',
       padding: '12px 14px',
       borderRadius: 10,
       border: '1px solid rgba(255,255,255,0.06)',
-      background: '#071126',
+      background: 'rgba(6,19,30,0.6)',
       color: '#e6eef8',
       outline: 'none',
       fontSize: 14,
@@ -341,8 +375,8 @@ export default function PostAdPage() {
     } as React.CSSProperties,
     btnPrimary: {
       padding: '12px 16px',
-      background: 'linear-gradient(90deg,#0ea5a3,#0891b2)',
-      color: '#042024',
+      background: 'linear-gradient(90deg,#06b6d4,#3b82f6)',
+      color: '#001219',
       border: 'none',
       borderRadius: 10,
       fontWeight: 700,
@@ -351,7 +385,7 @@ export default function PostAdPage() {
     } as React.CSSProperties,
     mapWrap: {
       width: '100%',
-      height: 300,
+      height: 320,
       borderRadius: 10,
       overflow: 'hidden',
       border: '1px solid rgba(255,255,255,0.04)',
@@ -359,15 +393,44 @@ export default function PostAdPage() {
   };
 
   return (
-    <main style={styles.page}>
+    <main style={styles.page} className="merchant-page">
+      <style>{`
+        .merchant-grid { display: grid; gap: 12px; }
+        .top-row { display:flex; gap:12px; align-items:center; margin-bottom:12px; justify-content:space-between; }
+        .title { font-size:20px; font-weight:800; color:#fff; display:flex; gap:8px; align-items:center; }
+        .subtle { color:#9fb3c9; font-size:13px; }
+        .flex-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+        .two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .payment-buttons { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .pay-btn { padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:700; border:1px solid rgba(255,255,255,0.06); background:transparent; color:#e6eef8; }
+        .pay-btn.active-sham { background:#f59e0b; color:#000; border:none; }
+        .pay-btn.active-usdt { background:#06b6d4; color:#000; border:none; }
+        .copy-btn { padding:8px 10px; border-radius:8px; background:rgba(255,255,255,0.03); color:#e6eef8; border:1px solid rgba(255,255,255,0.04); cursor:pointer; }
+        .payment-panel { margin-top:8px; padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.03); }
+        .sham-panel { background:#fff8ed; color:#7c2d12; }
+        .usdt-panel { background:#ecfeff; color:#064e3b; }
+        .actions-row { display:flex; gap:8px; align-items:center; justify-content:space-between; margin-top:8px; flex-wrap:wrap; }
+        .actions-left { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .reset-btn { padding:10px 14px; background:transparent; border:1px solid rgba(255,255,255,0.06); color:#cfeff7; border-radius:10px; cursor:pointer; }
+        .message { margin-top:8px; color:#fff; text-align:center; }
+        @media (max-width: 720px) {
+          .two-col { grid-template-columns: 1fr; }
+          .map-wrap-mobile { height: 220px !important; }
+          .previewBox { width:72px; height:72px; }
+          .title { font-size:18px; }
+          .btnPrimaryMobile { width:100%; }
+        }
+      `}</style>
+
       <div style={styles.container}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#fff' }}>📣 أنشر إعلانك</div>
+        <div className="top-row">
+          <div className="title">📣 أنشر إعلانك</div>
+          <div style={{ fontSize: 12, color: '#9fb3c9' }}>واجهة محسّنة للهواتف مع تجربة دفع مريحة</div>
         </div>
 
-        <div style={{ display: 'grid', gap: 12 }}>
+        <div className="merchant-grid">
           <div style={{ display: 'flex', gap: 8 }}>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} style={styles.input}>
+            <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...styles.input, maxWidth: 260 }}>
               <option value="cars">🚗 سيارات</option>
               <option value="real_estate">🏠 عقارات</option>
               <option value="machines">⚙️ آلات</option>
@@ -379,7 +442,7 @@ export default function PostAdPage() {
               <option value="animals">🐾 حيوانات</option>
             </select>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#cfeff7' }}>
               <input type="checkbox" checked={isCompany} onChange={(e) => setIsCompany(e.target.checked)} />
               شركة
             </label>
@@ -391,7 +454,7 @@ export default function PostAdPage() {
             ) : (
               <input value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="الاسم" style={{ ...styles.input, flex: 1 }} />
             )}
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={styles.input} />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={{ ...styles.input, maxWidth: 220 }} />
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -403,13 +466,13 @@ export default function PostAdPage() {
               </div>
             </div>
 
-            <div style={styles.previewBox}>
+            <div style={styles.previewBox as React.CSSProperties} className="previewBox">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {logoPreview ? <img src={logoPreview} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة شعار</div>}
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="two-col">
             <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="الدولة" style={styles.input} />
             <input value={province} onChange={(e) => setProvince(e.target.value)} placeholder="المحافظة" style={styles.input} />
             <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="المدينة" style={styles.input} />
@@ -421,7 +484,7 @@ export default function PostAdPage() {
               <div style={{ fontSize: 12, color: '#9fb3c9' }}>📍 اختر الموقع على الخريطة (انقر لتعيين)</div>
               {coords ? <div style={{ fontSize: 13, color: '#bfeffd' }}>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</div> : null}
             </div>
-            <div style={styles.mapWrap}>
+            <div style={{ ...styles.mapWrap }} className="map-wrap-mobile">
               {!leafletReady || !leafletRef.current ? (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bcdfe7', padding: 12 }}>
                   تحميل مكوّن الخريطة...
@@ -483,20 +546,132 @@ export default function PostAdPage() {
               </div>
             </div>
 
-            <div style={styles.previewBox}>
+            <div style={styles.previewBox as React.CSSProperties}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {imagePreview ? <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة الصورة</div>}
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <input value={paymentCode} onChange={(e) => setPaymentCode(e.target.value)} placeholder="رمز الدفع (مثال: شام كاش 10000)" style={styles.input} />
-            <input value={paymentId} onChange={(e) => setPaymentId(e.target.value)} placeholder="معرف الدفع (مثال: USDT 1$)" style={styles.input} />
+          {/* Payment inputs and payment buttons */}
+          <div className="two-col">
+            {/* Inputs are shown only when a payment method is selected */}
+            {selectedPayment === 'sham' ? (
+              <input value={paymentCode} onChange={(e) => setPaymentCode(e.target.value)} placeholder="رمز الدفع (مثال: شام كاش 10000)" style={styles.input} />
+            ) : (
+              <div />
+            )}
+
+            {selectedPayment === 'usdt' ? (
+              <input value={paymentId} onChange={(e) => setPaymentId(e.target.value)} placeholder="معرف الدفع (مثال: USDT 1$)" style={styles.input} />
+            ) : (
+              <div />
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleSubmit} disabled={loading} style={{ ...styles.btnPrimary, opacity: loading ? 0.7 : 1 }}>
+            <div className="payment-buttons">
+              <button
+                type="button"
+                onClick={() => togglePayment('sham')}
+                className={`pay-btn ${selectedPayment === 'sham' ? 'active-sham' : ''}`}
+                aria-pressed={selectedPayment === 'sham'}
+              >
+                دفع شام كاش
+              </button>
+
+              <button
+                type="button"
+                onClick={() => togglePayment('usdt')}
+                className={`pay-btn ${selectedPayment === 'usdt' ? 'active-usdt' : ''}`}
+                aria-pressed={selectedPayment === 'usdt'}
+              >
+                دفع USDT
+              </button>
+
+              <button
+                type="button"
+                onClick={() => copyToClipboard(SHAM_LINK)}
+                className="copy-btn"
+                aria-hidden={selectedPayment !== 'sham'}
+                style={{ opacity: selectedPayment === 'sham' ? 1 : 0, transition: 'opacity .15s ease' }}
+              >
+                نسخ رابط شام
+              </button>
+
+              <button
+                type="button"
+                onClick={() => copyToClipboard(USDT_LINK)}
+                className="copy-btn"
+                aria-hidden={selectedPayment !== 'usdt'}
+                style={{ opacity: selectedPayment === 'usdt' ? 1 : 0, transition: 'opacity .15s ease' }}
+              >
+                نسخ رابط USDT
+              </button>
+            </div>
+
+            <div style={{ minWidth: 220, textAlign: 'right', fontSize: 12, color: '#9fb3c9' }}>
+              بعد الحفظ يتم المراجعة من قبل الإدارة
+            </div>
+          </div>
+
+          {/* Payment detail panels (only visible when selected) */}
+          {selectedPayment === 'sham' && (
+            <div className="payment-panel sham-panel payment-panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                <div>
+                  <div style={{ fontWeight: 800 }}>دفع شام كاش</div>
+                  <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
+                    <div>1. انسخ رابط شام بالضغط على زر "نسخ رابط شام".</div>
+                    <div>2. افتح الرابط في متصفحك أو تطبيق شام كاش واتبع خطوات الدفع.</div>
+                    <div>3. احتفظ برقم الإيصال أو رمز الدفع بعد إتمام العملية.</div>
+                    <div>4. عد إلى هذا النموذج وأدخل رمز الدفع في الحقل المخصص أعلاه.</div>
+                    <div>5. بعد الحفظ سنراجع الدفع ونؤكد الإعلان عبر النظام.</div>
+                  </div>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(SHAM_LINK)}
+                    className="copy-btn"
+                    style={{ padding: '8px 10px' }}
+                  >
+                    نسخ رابط شام
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedPayment === 'usdt' && (
+            <div className="payment-panel usdt-panel payment-panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                <div>
+                  <div style={{ fontWeight: 800 }}>دفع USDT (TRC20)</div>
+                  <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
+                    <div>1. انسخ رابط USDT أو العنوان بالضغط على "نسخ رابط USDT".</div>
+                    <div>2. افتح محفظتك وتأكد من اختيار شبكة TRC20 قبل الإرسال.</div>
+                    <div>3. أرسل المبلغ إلى العنوان الظاهر في الرابط أو المحفظة.</div>
+                    <div>4. بعد تأكيد المعاملة انسخ TXID أو معرف المعاملة.</div>
+                    <div>5. الصق TXID في حقل معرف الدفع أعلاه ثم احفظ الإعلان.</div>
+                  </div>
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(USDT_LINK)}
+                    className="copy-btn"
+                    style={{ padding: '8px 10px' }}
+                  >
+                    نسخ رابط USDT
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="actions-row">
+            <div className="actions-left">
+              <button onClick={handleSubmit} disabled={loading} style={{ ...styles.btnPrimary, opacity: loading ? 0.7 : 1 }} className="btnPrimaryMobile">
                 {loading ? 'جارٍ الحفظ...' : 'حفظ الإعلان'}
               </button>
               <button
@@ -518,6 +693,9 @@ export default function PostAdPage() {
                   setPaymentCode('');
                   setPaymentId('');
                   setMessage(null);
+                  setImagePreview(null);
+                  setLogoPreview(null);
+                  setSelectedPayment(null);
                 }}
                 style={{
                   padding: '10px 14px',
@@ -537,7 +715,7 @@ export default function PostAdPage() {
             </div>
           </div>
 
-          {message && <div style={{ marginTop: 8, color: '#fff', textAlign: 'center' }}>{message}</div>}
+          {message && <div className="message">{message}</div>}
         </div>
       </div>
     </main>
