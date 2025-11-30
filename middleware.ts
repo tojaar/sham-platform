@@ -1,54 +1,26 @@
-// middleware.ts (ضعه في جذر المشروع)
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createMiddlewareSupabaseClient } from '@supabase/auth-helpers-nextjs';
 
-// نحمي مسارات /producer/* ولكن نستثني صفحة signin وموارد أخرى لتفادي حلقات إعادة التوجيه
-export const config = {
-  matcher: ['/producer/:path*'],
-};
+const ADMIN_PREFIX = '/admin';
+const COOKIE_NAME = 'admin';
 
-export async function middleware(req: NextRequest) {
-  const url = req.nextUrl.clone();
-  const pathname = req.nextUrl.pathname;
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-  const PUBLIC_PATHS = [
-    '/producer/signin',
-    '/producer/signout',
-    '/producer/reset',
-  ];
+  // لا نطبق الحماية على صفحة تسجيل الدخول أو API الخاصة بتسجيل الدخول/الخروج
+  if (!pathname.startsWith(ADMIN_PREFIX)) return NextResponse.next();
+  if (pathname === '/admin/login' || pathname.startsWith('/api/admin')) return NextResponse.next();
 
-  // السماح للـ _next و api و static و صفحات الاستثناءات بالمرور
-  if (
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/static') ||
-    PUBLIC_PATHS.includes(pathname)
-  ) {
-    return NextResponse.next();
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token) {
+    return NextResponse.redirect(new URL('/admin/login', req.url));
   }
 
-  try {
-    const res = NextResponse.next();
-    const supabase = createMiddlewareSupabaseClient({ req, res } as any);
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    // إذا توجد جلسة سامح بالوصول
-    if (session) {
-      return res;
-    }
-
-    // لا توجد جلسة → إعادة توجيه لمرة واحدة إلى صفحة تسجيل الدخول
-    url.pathname = '/producer/signin';
-    url.searchParams.set('returnTo', req.nextUrl.pathname);
-    return NextResponse.redirect(url);
-  } catch (err) {
-    // في حال خطأ غير متوقع، أعِد التوجيه إلى صفحة تسجيل الدخول لتجنب حلقات لا نهائية
-    const fallback = req.nextUrl.clone();
-    fallback.pathname = '/producer/signin';
-    return NextResponse.redirect(fallback);
-  }
+  // قيمة الكوكي بسيطة ('1')، وجودها يعني مصادقة
+  return NextResponse.next();
 }
+
+export const config = {
+  matcher: ['/admin/:path*'],
+};

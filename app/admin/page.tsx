@@ -2,8 +2,16 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function adminForm() {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch('/api/admin/logout', { method: 'POST' });
+    router.push('/admin/login');
+  };
+
   return (
     <main className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,#000000_0%,#071018_25%,_#03040a_60%)] text-white antialiased flex items-center justify-center p-6">
       <div className="relative w-full max-w-5xl">
@@ -24,9 +32,14 @@ export default function adminForm() {
 
         <div className="relative z-10 bg-gradient-to-b from-[#061018] via-[#07121a] to-[#041018] border border-white/6 rounded-2xl shadow-2xl p-8">
           <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">لوحة الادارة</h1>
-              <p className="mt-2 text-sm text-white/70 max-w-xl">اختَر لوحة الإدارة التي تريد الدخول إليها. سهولة، سرعة، وتحكم كامل.</p>
+            <div className="flex items-center gap-4">
+              {/* شعار الشركة من public/assets/tojar.* */}
+              {/* استخدمت عنصر img بسيط لسهولة الاستخدام؛ تأكد من امتداد الملف (png/jpg/svg) في المسار */}
+              <img src="/assets/tojar.png" alt="Tojar" className="w-20 h-20 object-contain rounded-md shadow-sm bg-white/5 p-1 hidden sm:block" />
+              <div>
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">لوحة الادارة</h1>
+                <p className="mt-2 text-sm text-white/70 max-w-xl">اختَر لوحة الإدارة التي تريد الدخول إليها. سهولة، سرعة، وتحكم كامل.</p>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">
@@ -43,6 +56,8 @@ export default function adminForm() {
             <AdminButton href="/admin/hire" title="Hire" subtitle="إدارة منشورات التوظيف" accentStart="#06b6d4" accentEnd="#ef4444" icon="🧑‍💼" />
             <AdminButton href="/admin/seeker" title="Seeker" subtitle="إدارة الباحثين عن عمل" accentStart="#06b6d4" accentEnd="#10b981" icon="🔍" />
             <AdminButton href="/admin/post" title="Post" subtitle="إدارة الإعلانات التجارية" accentStart="#06b6d4" accentEnd="#f97316" icon="📣" />
+            {/* الزر الجديد لصفحة dashboard */}
+            <AdminButton href="/admin/dashboard" title="Dashboard" subtitle="لوحة تحكم عامة" accentStart="#06b6d4" accentEnd="#8b5cf6" icon="📊" />
           </section>
 
           <footer className="mt-8 flex items-center justify-between text-xs text-white/60">
@@ -50,6 +65,13 @@ export default function adminForm() {
             <div className="flex items-center gap-3">
               <span className="text-white/50">نسخة</span>
               <span className="font-mono text-white/70 text-sm">v1.0</span>
+              {/* زر الخروج */}
+              <button
+                onClick={handleLogout}
+                className="ml-4 px-3 py-1 rounded-md bg-red-600 text-white text-xs font-semibold hover:bg-red-700 transition"
+              >
+                خروج
+              </button>
             </div>
           </footer>
         </div>
