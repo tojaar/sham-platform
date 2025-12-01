@@ -29,7 +29,7 @@ type Comm = {
   province?: string | null;
   city?: string | null;
   address?: string | null;
-  location?: string | null; // نص أو "lat,lng"
+  location?: string | null;
   image_url?: string | null;
   company_logo?: string | null;
   status?: string | null;
@@ -44,14 +44,12 @@ type Comm = {
 type LeafletComponents = {
   MapContainer?: React.JSXElementConstructor<unknown>;
   TileLayer?: React.JSXElementConstructor<unknown>;
-  Marker?: React.JSXElementConstructor<unknown>;
   Popup?: React.JSXElementConstructor<unknown>;
   CircleMarker?: React.JSXElementConstructor<unknown>;
 };
 
 /* ---------- Helpers ---------- */
 
-// parse location strings like "lat,lng" or JSON-ish
 const parseLocation = (loc?: string | null) => {
   if (!loc) return null;
   try {
@@ -81,7 +79,7 @@ const formatCount = (n?: number | null) => {
   return String(v);
 };
 
-/* ---------- MapAutoCenter component (used when map instance is available) ---------- */
+/* ---------- MapAutoCenter component ---------- */
 function MapAutoCenter({ map, coords }: { map: unknown; coords: { lat: number; lng: number } | null }) {
   useEffect(() => {
     if (!map || !coords) return;
@@ -112,7 +110,6 @@ export default function SearchCommForm() {
   const [province, setProvince] = useState<string | ''>('');
   const [city, setCity] = useState<string | ''>('');
   const [category, setCategory] = useState<string | ''>('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const [selected, setSelected] = useState<Comm | null>(null);
   const [mapKey, setMapKey] = useState(0);
@@ -126,7 +123,6 @@ export default function SearchCommForm() {
   const [likedLocal, setLikedLocal] = useState<Record<string, boolean>>({});
   const [likeAnimating, setLikeAnimating] = useState<Record<string, boolean>>({});
 
-  // small helper to safely read string properties from Comm
   const getString = (obj: Comm | null, key: string) => {
     if (!obj) return undefined;
     const v = obj[key];
@@ -147,7 +143,6 @@ export default function SearchCommForm() {
         .range(0, 99999);
 
       if (error) throw error;
-      // ensure likes field exists locally
       const arr = (data ?? []) as unknown[];
       setComms(arr.map((r) => ({ ...(r as Comm), likes: (r as Comm).likes ?? 0 })));
     } catch (err: unknown) {
@@ -170,7 +165,6 @@ export default function SearchCommForm() {
     (async () => {
       if (typeof window === 'undefined') return;
       try {
-        // inject leaflet css only once (avoid TypeScript dynamic CSS import issue)
         if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
           const link = document.createElement('link');
           link.rel = 'stylesheet';
@@ -189,7 +183,6 @@ export default function SearchCommForm() {
 
         const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
 
-        // fix default icon paths (safe reflection)
         try {
           const leafletUnknown: unknown = leafletModule;
           if (leafletUnknown && typeof leafletUnknown === 'object') {
@@ -217,7 +210,6 @@ export default function SearchCommForm() {
         LeafletRef.current = {
           MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<unknown>,
           TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<unknown>,
-          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<unknown>,
           Popup: (reactLeafletModule as Record<string, unknown>).Popup as React.JSXElementConstructor<unknown>,
           CircleMarker: (reactLeafletModule as Record<string, unknown>).CircleMarker as React.JSXElementConstructor<unknown>,
         };
@@ -300,11 +292,6 @@ export default function SearchCommForm() {
 
   const closeDetails = () => setSelected(null);
 
-  const getImageFor = (c?: Comm | null) => {
-    if (!c) return null;
-    return (c.image_url ?? c.company_logo ?? null) as string | null;
-  };
-
   /* ---------- like handler (optimistic + persist) ---------- */
   const persistLikeToDb = useCallback(async (id: string, newCount: number) => {
     try {
@@ -360,18 +347,20 @@ export default function SearchCommForm() {
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: rgba(239,68,68,0.95); /* red */
+            background: rgba(239,68,68,0.95);
             opacity: 0;
             transform: translate(-50%, -50%) scale(0.6);
             transition: transform 0.35s ease, opacity 0.35s ease;
           }
           .like-burst.animate .burst-dot { opacity: 1; transform: translate(-50%, -50%) scale(1.6); }
 
-          /* Facebook-like post card tweaks */
+          /* Card aesthetics */
+          .fb-post { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius: 12px; overflow: hidden; }
           .fb-post .post-header { padding: 12px; display:flex; gap:12px; align-items:center; }
           .fb-post .post-body { padding: 0 12px 12px 12px; }
-          .fb-post .post-image { width:100%; border-radius:8px; overflow:hidden; margin-top:8px; }
+          .fb-post .post-image { width:100%; border-radius:8px; overflow:hidden; margin-top:8px; background:#07171b; }
           .fb-post .post-actions { padding: 8px 12px 12px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+          .card-shadow { box-shadow: 0 6px 18px rgba(2,6,23,0.6); }
         `}</style>
       </Head>
 
@@ -449,10 +438,6 @@ export default function SearchCommForm() {
                   إعادة الضبط
                 </button>
                 <div className="text-sm text-white/60 mt-1">النتائج: <span className="font-medium">{filtered.length}</span></div>
-                <div className="ml-4 flex gap-2">
-                  <button onClick={() => setViewMode('list')} className={`px-3 py-2 rounded ${viewMode === 'list' ? 'bg-red-600' : 'bg-gray-800'}`}>قائمة</button>
-                  <button onClick={() => setViewMode('grid')} className={`px-3 py-2 rounded ${viewMode === 'grid' ? 'bg-red-600' : 'bg-gray-800'}`}>شبكة</button>
-                </div>
               </div>
             </div>
           </section>
@@ -465,23 +450,22 @@ export default function SearchCommForm() {
             ) : filtered.length === 0 ? (
               <div className="py-12 text-center text-white/60">لا توجد نتائج تطابق بحثك الآن.</div>
             ) : (
-              /* Facebook-like feed: use list of cards (grid mode will still show cards but arranged) */
-              <div className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
+              <div className="space-y-4">
                 {filtered.map((c) => {
-                  const image = getImageFor(c);
+                  const image = (c.image_url ?? c.company_logo) as string | null;
                   return (
                     <article
                       key={c.id}
-                      className="fb-post bg-white/3 hover:bg-white/5 border border-white/6 rounded-lg overflow-hidden shadow-sm"
+                      className="fb-post card-shadow bg-white/3 hover:bg-white/5 border border-white/6 rounded-lg overflow-hidden transition"
                       onClick={() => openDetails(c)}
                     >
-                      {/* header */}
                       <div className="post-header">
-                        <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center flex-shrink-0 ml-1">
+                        <div className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center flex-shrink-0 ml-1">
                           {image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={String(image)} alt="avatar" className="object-cover w-full h-full" />
                           ) : (
-                            <div className="text-xs text-white/60">لا صورة</div>
+                            <div className="text-xs text-white/90">لا صورة</div>
                           )}
                         </div>
 
@@ -496,12 +480,12 @@ export default function SearchCommForm() {
                         </div>
                       </div>
 
-                      {/* body */}
                       <div className="post-body">
                         <div className="text-[14px] text-slate-300 mb-2 px-1 line-clamp-3">{c.description ?? ''}</div>
 
                         {image && (
-                          <div className="post-image bg-[#07171b]">
+                          <div className="post-image">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={String(image)} alt="post image" className="w-full h-auto object-cover" />
                           </div>
                         )}
@@ -514,7 +498,6 @@ export default function SearchCommForm() {
                         </div>
                       </div>
 
-                      {/* actions */}
                       <div className="post-actions">
                         <div className="flex items-center gap-2">
                           <button
@@ -554,62 +537,57 @@ export default function SearchCommForm() {
           </section>
         </div>
 
-        {/* Details modal */}
+        {/* Details modal - smaller for mobile, with aesthetics */}
         {selected && (
-          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ perspective: 1000 }}>
-            <div className="absolute inset-0 bg-black/60" onClick={closeDetails} />
-            <div className="relative w-full max-w-[95vw] sm:max-w-2xl bg-[#061017] border border-white/6 rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(2,6,23,0.8)] z-10 transform-gpu">
+          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-3">
+            <div className="absolute inset-0 bg-black/70" onClick={closeDetails} />
+            <div className="relative w-full max-w-[92vw] sm:max-w-xl bg-[#061017] border border-white/6 rounded-2xl overflow-hidden shadow-[0_30px_80px_rgba(2,6,23,0.85)] z-10 transform-gpu">
               <div className="absolute -inset-0.5 rounded-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(239,68,68,0.06), rgba(6,182,212,0.03))', filter: 'blur(6px)' }} />
 
-              <div className="flex items-start justify-between p-4 border-b border-white/6">
+              <div className="flex items-start justify-between p-3 border-b border-white/6">
                 <div className="flex items-center gap-3">
                   {selected.image_url ? (
-                    <div className="w-12 h-12 rounded-md overflow-hidden bg-[#07121a] flex items-center justify-center border border-white/6">
+                    <div className="w-10 h-10 rounded-md overflow-hidden bg-[#07121a] flex items-center justify-center border border-white/6">
                       <img src={String(selected.image_url)} alt="شعار" className="w-full h-full object-contain" />
                     </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-md flex items-center justify-center bg-gradient-to-br from-red-500 to-red-700 text-black font-semibold">Co</div>
+                    <div className="w-10 h-10 rounded-md flex items-center justify-center bg-gradient-to-br from-red-500 to-red-700 text-black font-semibold">Co</div>
                   )}
 
                   <div>
-                    <h2 className="text-lg font-bold">{selected.title ?? selected.category ?? '—'}</h2>
-                    <p className="text-sm text-white/70">{selected.company ?? selected.contact ?? '—'}</p>
-                    <div className="text-xs text-white/60">{fmtDate(selected.created_at)}</div>
+                    <h2 className="text-base font-bold leading-tight">{selected.title ?? selected.category ?? '—'}</h2>
+                    <p className="text-xs text-white/70">{selected.company ?? selected.contact ?? '—'}</p>
+                    <div className="text-[11px] text-white/60">{fmtDate(selected.created_at)}</div>
                   </div>
                 </div>
 
                 <button onClick={closeDetails} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded bg-white/3">✕</button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-                <div className="space-y-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3">
+                <div className="space-y-2">
                   {selected.company_logo ? (
-                    <div className="w-full h-48 sm:h-56 rounded-xl border border-white/6 bg-[#07171b] overflow-hidden flex items-center justify-center">
+                    <div className="w-full h-40 sm:h-44 rounded-xl border border-white/6 bg-[#07171b] overflow-hidden flex items-center justify-center">
                       <img src={String(selected.company_logo)} alt="صورة الإعلان" className="max-w-full max-h-full object-contain" />
                     </div>
                   ) : (
-                    <div className="w-full h-48 sm:h-56 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
+                    <div className="w-full h-40 sm:h-44 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
                   )}
 
-                  <div className="text-sm text-white/70 space-y-2">
-                    <p><strong>العنوان / الفئة: </strong>{selected.title ?? selected.category ?? '—'}</p>
-                    <p><strong>الوصف: </strong>{selected.description ?? '—'}</p>
+                  <div className="text-sm text-white/70 space-y-1">
+                    <p className="text-sm"><strong>العنوان / الفئة: </strong>{selected.title ?? selected.category ?? '—'}</p>
+                    <p className="text-sm"><strong>الوصف: </strong>{selected.description ?? '—'}</p>
 
-                    <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="grid grid-cols-2 gap-2 mt-1 text-sm">
                       <div><strong>الشركة:</strong> <div className="text-white/70 inline">{getString(selected, 'name') ?? '—'}</div></div>
                       <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
                       <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
                       <div><strong>العنوان:</strong> <div className="text-white/70 inline">{selected.address ?? '—'}</div></div>
                     </div>
-
-                    <div className="mt-2 text-xs text-white/60">
-                      <div><strong>الموقع:</strong> {selected.country ?? '—'} / {selected.province ?? '—'} / {selected.city ?? '—'}</div>
-                      <div className="mt-1"><strong>تاريخ النشر:</strong> {fmtDate(selected.created_at)}</div>
-                    </div>
                   </div>
                 </div>
 
-                <div className="h-56 lg:h-full bg-black rounded-xl overflow-hidden border border-white/6">
+                <div className="h-44 lg:h-full bg-black rounded-xl overflow-hidden border border-white/6">
                   {(() => {
                     const loc =
                       parseLocation(selected.location ?? undefined) ??
@@ -653,7 +631,7 @@ export default function SearchCommForm() {
                         React.createElement(MapAutoCenter as React.JSXElementConstructor<unknown>, { map: mapRef.current, coords: loc }),
                         React.createElement(
                           CircleMarkerComp as React.JSXElementConstructor<unknown>,
-                          { center: [loc.lat, loc.lng], radius: 8, pathOptions: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 } },
+                          { center: [loc.lat, loc.lng], radius: 7, pathOptions: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 } },
                           React.createElement(PopupComp as React.JSXElementConstructor<unknown>, null, `${selected.title ?? 'موقع'}\n${selected.address ?? ''}`)
                         )
                       );
@@ -663,16 +641,16 @@ export default function SearchCommForm() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 p-4 border-t border-white/6">
+              <div className="flex items-center justify-end gap-2 p-3 border-t border-white/6">
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? '')).trim())}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white"
+                  className="px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm"
                 >
                   افتح في الخرائط
                 </a>
-                <button onClick={closeDetails} className="px-4 py-2 rounded-md bg-white/6">إغلاق</button>
+                <button onClick={closeDetails} className="px-3 py-2 rounded-md bg-white/6 text-sm">إغلاق</button>
               </div>
             </div>
           </div>
