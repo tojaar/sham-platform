@@ -155,7 +155,7 @@ export default function SearchCommForm() {
     } catch (err: unknown) {
       console.error('fetchComms error', err);
       const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
-      setMessage('تعذر جلب البيانات: ' + msg);
+      setMessage('تعذر جلب البيانات تأكد من الشبكة: ' + msg);
       setComms([]);
     } finally {
       setLoading(false);
