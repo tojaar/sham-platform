@@ -406,7 +406,7 @@ export default function SearchHirePage() {
             </div>
           </section>
 
-          {/* قائمة المنشورات (ستايل قريب من فيسبوك) */}
+          {/* قائمة المنشورات - تصميم شبيه بفيسبوك */}
           <section>
             {loading ? (
               <div className="py-16 sm:py-20 text-center text-white/70">جاري التحميل...</div>
@@ -415,7 +415,7 @@ export default function SearchHirePage() {
             ) : filtered.length === 0 ? (
               <div className="py-10 sm:py-12 text-center text-white/60">لا توجد نتائج تطابق بحثك الآن.</div>
             ) : (
-              <ul className="space-y-3">
+              <ul className="space-y-4">
                 {filtered.map((h) => {
                   const image = safeImage(
                     h.image_url ??
@@ -429,66 +429,62 @@ export default function SearchHirePage() {
                           setSelected(h);
                           setMapKey((k) => k + 1);
                         }}
-                        className="group cursor-pointer bg-[#07191f] hover:bg-[#0b2330] border border-white/6 rounded-lg p-3 sm:p-4 flex items-start gap-3 sm:gap-4 transition"
+                        className="group cursor-pointer bg-white/3 hover:bg-white/5 border border-white/6 rounded-lg overflow-hidden transition-shadow shadow-sm"
                       >
-                        {/* صورة مصغّرة/أفاتار */}
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-md overflow-hidden bg-gray-800 flex items-center justify-center flex-shrink-0">
-                          {image ? (
-                            <Image
-                              src={image}
-                              alt={h.profession ?? h.title ?? 'صورة'}
-                              width={56}
-                              height={56}
-                              className="object-cover w-full h-full"
-                              unoptimized
-                            />
-                          ) : (
-                            <div className="text-[10px] sm:text-xs text-white/60 px-2 text-center">لا صورة</div>
-                          )}
+                        {/* رأس المنشور */}
+                        <div className="flex items-center gap-3 p-3">
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center flex-shrink-0 ml-1">
+                            {image ? (
+                              <Image src={image} alt="avatar" width={40} height={40} className="object-cover w-full h-full" unoptimized />
+                            ) : (
+                              <div className="text-xs text-white/60">لا صورة</div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold truncate">{h.profession ?? h.title ?? '—'}</div>
+                                <div className="text-[12px] text-white/60 truncate">{h.name ?? '—'}</div>
+                              </div>
+                              <time className="text-[11px] text-white/60">{h.created_at ? new Date(h.created_at).toLocaleString() : ''}</time>
+                            </div>
+                          </div>
                         </div>
 
-                        {/* محتوى على نمط منشورات */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-3">
-                            <h3 className="text-sm sm:text-base font-semibold truncate">
-                              {h.profession ?? h.title ?? '—'}
-                            </h3>
-                            <time className="text-[11px] sm:text-xs text-white/60">
-                              {h.created_at ? new Date(h.created_at).toLocaleString() : ''}
-                            </time>
-                          </div>
+                        {/* محتوى المنشور */}
+                        <div className="px-3 pb-3">
+                          <div className="text-[14px] text-slate-300 mb-3 line-clamp-3 px-1">{h.description ?? ''}</div>
 
-                          <div className="mt-2 text-[13px] sm:text-sm text-slate-300 line-clamp-3 sm:line-clamp-2">
-                            {h.description ?? ''}
-                          </div>
+                          {image && (
+                            <div className="w-full rounded-md overflow-hidden bg-[#07171b] mb-3">
+                              <Image src={image} alt="post image" width={1200} height={675} className="w-full h-auto object-cover" unoptimized />
+                            </div>
+                          )}
 
-                          <div className="mt-3 flex items-center gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelected(h);
-                              }}
-                              className="px-3 py-1 rounded bg-sky-600 text-xs sm:text-sm"
-                            >
-                              عرض
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard?.writeText(h.phone ?? '');
-                                setMessage('تم نسخ رقم الهاتف');
-                                setTimeout(() => setMessage(null), 2000);
-                              }}
-                              className="px-3 py-1 rounded bg-white/6 text-xs sm:text-sm"
-                            >
-                              نسخ هاتف
-                            </button>
-                          </div>
+                          {/* أزرار التفاعل (عرض/تعليقات/مشاركة) */}
+                          <div className="flex items-center justify-between px-1">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelected(h);
+                                }}
+                                className="px-3 py-1 rounded-md bg-cyan-600 hover:bg-cyan-700 text-xs sm:text-sm"
+                              >
+                                عرض
+                              </button>
+                            </div>
 
-                          <div className="mt-2 flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-white/60">
-                            <span>{h.city ?? '—'}</span>
-                            <span className="hidden sm:inline">•</span>
-                            <span className="hidden sm:inline">{h.province ?? '—'}</span>
+                            <div className="flex items-center gap-3 text-[12px] text-white/60">
+                              <div className="flex items-center gap-1">
+                                <svg className="w-4 h-4 text-white/70" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M12 21s-6-4.35-9-7.5C-1 9.5 3 4 8 4c2.5 0 3.5 1.5 4 2.5.5-1 1.5-2.5 4-2.5 5 0 9 5.5 5 9.5C18 16.65 12 21 12 21z" stroke="currentColor" strokeWidth="0.5" />
+                                </svg>
+                                <span>إعجاب</span>
+                              </div>
+                              <div>•</div>
+                              <div>{h.city ?? '—'}</div>
+                            </div>
                           </div>
                         </div>
                       </article>
@@ -534,152 +530,166 @@ export default function SearchHirePage() {
             <div className="md:col-span-2" />
           </section>
 
-          {/* نافذة التفاصيل */}
+          {/* نافذة التفاصيل - إطار ثلاثي الأبعاد حديث */}
           {selected && (
-            <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4"
+              style={{ perspective: 1200 }}
+            >
               <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
 
-              <div className="relative max-w-[95vw] sm:max-w-4xl w-full bg-[#061017] border border-white/6 rounded-lg overflow-hidden shadow-xl z-10">
-                {/* رأس */}
-                <div className="flex items-start justify-between p-3 sm:p-4 border-b border-white/6">
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-bold truncate">
-                      {selected.title ?? selected.profession ?? '—'}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-white/70 truncate">{selected.name ?? '—'}</p>
+              <div
+                className="relative w-full max-w-[95vw] sm:max-w-4xl bg-[#061017] border border-white/6 rounded-lg overflow-hidden shadow-2xl z-10 transform-gpu will-change-transform"
+                style={{
+                  transform: 'translateZ(0) rotateX(0deg)',
+                  boxShadow: '0 20px 50px rgba(2,6,23,0.7), inset 0 1px 0 rgba(255,255,255,0.02)',
+                }}
+              >
+                {/* بطاقة داخلية مع تأثير عمق ثلاثي الأبعاد */}
+                <div
+                  className="relative bg-gradient-to-br from-[#07121a] to-[#071827] rounded-lg"
+                  style={{
+                    transform: 'translateZ(30px)',
+                    borderRadius: 12,
+                  }}
+                >
+                  {/* رأس */}
+                  <div className="flex items-start justify-between p-3 sm:p-4 border-b border-white/6">
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-bold truncate">
+                        {selected.title ?? selected.profession ?? '—'}
+                      </h2>
+                      <p className="text-xs sm:text-sm text-white/70 truncate">{selected.name ?? '—'}</p>
+                    </div>
+                    <button onClick={() => setSelected(null)} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded">
+                      ✕
+                    </button>
                   </div>
-                  <button onClick={() => setSelected(null)} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded">
-                    ✕
-                  </button>
-                </div>
 
-                {/* محتوى */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4">
-                  {/* صورة مع تكبير/تصغير بالإيماءات فقط */}
-                  <div className="space-y-2">
-                    {safeImage(
-                      selected.image_url ??
-                        (typeof selected.image === 'string' ? selected.image : null) ??
-                        (typeof selected.photo === 'string' ? selected.photo : null)
-                    ) ? (
-                      <div
-                        className="w-full h-56 sm:h-64 rounded-md border border-white/6 bg-[#07171b] flex items-center justify-center overflow-hidden"
-                        style={{
-                          touchAction: 'pinch-zoom',
-                          overflow: 'auto',
-                        }}
-                      >
-                        <Image
-                          src={String(
-                            selected.image_url ??
-                              (typeof selected.image === 'string' ? selected.image : null) ??
-                              (typeof selected.photo === 'string' ? selected.photo : null)
-                          )}
-                          alt="صورة المنشور"
-                          width={1200}
-                          height={675}
-                          className="object-contain max-w-none w-auto h-full"
-                          unoptimized
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-full h-56 sm:h-64 bg-[#07171b] rounded-md border border-white/6 flex items-center justify-center text-white/60">
-                        لا توجد صورة
-                      </div>
-                    )}
+                  {/* محتوى */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4">
+                    {/* صورة مع تكبير/تصغير بالإيماءات */}
+                    <div className="space-y-2">
+                      {safeImage(
+                        selected.image_url ??
+                          (typeof selected.image === 'string' ? selected.image : null) ??
+                          (typeof selected.photo === 'string' ? selected.photo : null)
+                      ) ? (
+                        <div
+                          className="w-full h-56 sm:h-64 rounded-md border border-white/6 bg-[#07171b] flex items-center justify-center overflow-auto"
+                          style={{ touchAction: 'pinch-zoom' }}
+                        >
+                          <Image
+                            src={String(
+                              selected.image_url ??
+                                (typeof selected.image === 'string' ? selected.image : null) ??
+                                (typeof selected.photo === 'string' ? selected.photo : null)
+                            )}
+                            alt="صورة المنشور"
+                            width={1200}
+                            height={675}
+                            className="object-contain max-w-none w-auto h-full"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-full h-56 sm:h-64 bg-[#07171b] rounded-md border border-white/6 flex items-center justify-center text-white/60">
+                          لا توجد صورة
+                        </div>
+                      )}
 
-                    {/* معلومات مرتبة ومناسبة للهاتف */}
-                    <div className="text-[13px] sm:text-sm text-white/70">
-                      <p>
-                        <strong>المهنة المطلوبة: </strong>
-                        {selected.profession ?? selected.title ?? '—'}
-                      </p>
-                      <p className="mt-2">
-                        <strong>الوصف: </strong>
-                        {selected.description ?? '—'}
-                      </p>
+                      {/* معلومات مرتبة ومناسبة للهاتف */}
+                      <div className="text-[13px] sm:text-sm text-white/70">
+                        <p>
+                          <strong>المهنة المطلوبة: </strong>
+                          {selected.profession ?? selected.title ?? '—'}
+                        </p>
+                        <p className="mt-2">
+                          <strong>الوصف: </strong>
+                          {selected.description ?? '—'}
+                        </p>
 
-                      <div className="space-y-1.5 sm:space-y-2 mt-3">
-                        <div>
-                          <strong>الهاتف:</strong> {selected.phone ?? '—'}
-                        </div>
-                        <div>
-                          <strong>الراتب او الاجور:</strong> {selected.salary ?? '—'}
-                        </div>
-                        <div>
-                          <strong>عدد ساعات العمل في اليوم:</strong> {selected.hours ?? '—'}
-                        </div>
-                        <div>
-                          <strong>مكان العمل:</strong> {selected.job_location ?? '—'}
-                        </div>
-                        <div>
-                          <strong>الدولة:</strong> {selected.country ?? '—'}
-                        </div>
-                        <div>
-                          <strong>المحافظة:</strong> {selected.province ?? '—'}
-                        </div>
-                        <div>
-                          <strong>المدينة:</strong> {selected.city ?? '—'}
-                        </div>
-                        <div>
-                          <strong>الحالة:</strong>{' '}
-                          {selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : 'بانتظار'}
-                        </div>
-                        <div>
-                          <strong>تاريخ النشر:</strong>{' '}
-                          {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}
+                        <div className="space-y-1.5 sm:space-y-2 mt-3">
+                          <div>
+                            <strong>الهاتف:</strong> {selected.phone ?? '—'}
+                          </div>
+                          <div>
+                            <strong>الراتب او الاجور:</strong> {selected.salary ?? '—'}
+                          </div>
+                          <div>
+                            <strong>عدد ساعات العمل في اليوم:</strong> {selected.hours ?? '—'}
+                          </div>
+                          <div>
+                            <strong>مكان العمل:</strong> {selected.job_location ?? '—'}
+                          </div>
+                          <div>
+                            <strong>الدولة:</strong> {selected.country ?? '—'}
+                          </div>
+                          <div>
+                            <strong>المحافظة:</strong> {selected.province ?? '—'}
+                          </div>
+                          <div>
+                            <strong>المدينة:</strong> {selected.city ?? '—'}
+                          </div>
+                          <div>
+                            <strong>الحالة:</strong>{' '}
+                            {selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : 'بانتظار'}
+                          </div>
+                          <div>
+                            <strong>تاريخ النشر:</strong>{' '}
+                            {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* خريطة مع نقطة خضراء واضحة */}
-                  <div className="h-64 lg:h-full bg-black rounded-md overflow-hidden border border-white/6">
-                    {parseLocation(selected.location) ? (
-                      <MapContainer
-                        key={mapKey}
-                        center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
-                        zoom={13}
-                        style={{ height: '100%', width: '100%' }}
-                        scrollWheelZoom={false}
-                      >
-                        <TileLayer
-                          attribution="&copy; OpenStreetMap contributors"
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                        <CircleMarker
+                    {/* خريطة مع نقطة خضراء واضحة */}
+                    <div className="h-64 lg:h-full bg-black rounded-md overflow-hidden border border-white/6">
+                      {parseLocation(selected.location) ? (
+                        <MapContainer
+                          key={mapKey}
                           center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
-                          radius={8}
-                          pathOptions={{ color: '#10b981', fillColor: '#10b981', fillOpacity: 0.9 }}
+                          zoom={13}
+                          style={{ height: '100%', width: '100%' }}
+                          scrollWheelZoom={false}
                         >
-                          <Popup>
-                            {selected.profession ?? selected.title ?? 'موقع'} <br /> {selected.location}
-                          </Popup>
-                        </CircleMarker>
-                      </MapContainer>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/60 px-4">
-                        لا توجد إحداثيات صالحة لعرض الخريطة
-                      </div>
-                    )}
+                          <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          <CircleMarker
+                            center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]}
+                            radius={8}
+                            pathOptions={{ color: '#10b981', fillColor: '#10b981', fillOpacity: 0.95 }}
+                          >
+                            <Popup>
+                              {selected.profession ?? selected.title ?? 'موقع'} <br /> {selected.location}
+                            </Popup>
+                          </CircleMarker>
+                        </MapContainer>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/60 px-4">
+                          لا توجد إحداثيات صالحة لعرض الخريطة
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* أزرار سفلية */}
-                <div className="flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-white/6">
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      (selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? '')
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 sm:px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700 text-xs sm:text-sm"
-                  >
-                    افتح في الخرائط
-                  </a>
-                  <button onClick={() => setSelected(null)} className="px-3 sm:px-4 py-2 rounded-md bg-white/6 text-xs sm:text-sm">
-                    إغلاق
-                  </button>
+                  {/* أزرار سفلية */}
+                  <div className="flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-white/6">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        (selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? '')
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 sm:px-4 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700 text-xs sm:text-sm"
+                    >
+                      افتح في الخرائط
+                    </a>
+                    <button onClick={() => setSelected(null)} className="px-3 sm:px-4 py-2 rounded-md bg-white/6 text-xs sm:text-sm">
+                      إغلاق
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
