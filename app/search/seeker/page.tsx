@@ -279,9 +279,13 @@ export default function SearchSeekerForm() {
           /* Card shadow */
           .card-shadow { box-shadow: 0 8px 30px rgba(2,6,23,0.55); }
 
-          /* Details modal smaller for mobile */
-          .details-modal { max-width: 92vw; border-radius: 14px; }
-          @media (min-width: 640px) { .details-modal { max-width: 460px; } }
+          /* Details modal smaller for mobile and compact */
+          .details-modal { max-width: 88vw; border-radius: 12px; padding: 10px; }
+          @media (min-width: 640px) { .details-modal { max-width: 420px; } }
+          @media (min-width: 1024px) { .details-modal { max-width: 520px; } }
+
+          /* Back button placement at bottom of modal content */
+          .modal-back-bottom { display:block; width:100%; margin-top:12px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.06); color:white; text-align:center; }
 
           /* Accessibility focus */
           button:focus, a:focus { outline: none; box-shadow: 0 0 0 4px rgba(239,68,68,0.12); border-radius: 10px; }
@@ -302,7 +306,7 @@ export default function SearchSeekerForm() {
           <header className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 justify-between mb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">آخر المنشورات</h1>
-              <p className="mt-1 text-sm text-white/70">تصفح المنشورات كما في فيسبوك — تفاعل، اعجب، واطّلع على التفاصيل</p>
+              <p className="mt-1 text-sm text-white/70">تصفح المنشورات كما في فيسبوك — تفاعل واطّلع على التفاصيل</p>
             </div>
 
             <div className="w-full sm:w-[360px]">
@@ -408,7 +412,7 @@ export default function SearchSeekerForm() {
                           </div>
                         )}
 
-                        {/* أزرار التفاعل تظهر أسفل المنشور (مثل فيسبوك) */}
+                        {/* أزرار التفاعل تظهر أسفل المنشور (مثل فيسبوك) - فقط زر التفاعل */}
                         <div className="post-actions">
                           <div className="flex items-center gap-2">
                             <div className={`like-burst ${likeAnimating[String(s.id)] ? 'animate' : ''}`}>
@@ -430,31 +434,6 @@ export default function SearchSeekerForm() {
                               <span className="burst-dot" style={{ left: '25%', top: '80%' }} />
                               <span className="burst-dot" style={{ left: '75%', top: '75%' }} />
                             </div>
-
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openDetails(s);
-                              }}
-                              className="action-btn"
-                            >
-                              <svg className="w-5 h-5 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                              </svg>
-                              <span className="text-sm">تعليق</span>
-                            </button>
-
-                            <button
-                              onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(window.location.href + '#post-' + s.id); }}
-                              className="action-btn"
-                            >
-                              <svg className="w-5 h-5 text-white/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M15 7h4v4" />
-                                <path d="M10 14L21 3" />
-                                <path d="M21 21H3V3" />
-                              </svg>
-                              <span className="text-sm">مشاركة</span>
-                            </button>
                           </div>
 
                           <div className="text-xs text-white/60">
@@ -483,26 +462,26 @@ export default function SearchSeekerForm() {
           </section>
         </div>
 
-        {/* Details Modal (أصغر لتناسب الهاتف) */}
+        {/* Details Modal (أصغر لتناسب الهاتف) مع زر رجوع في الأسفل */}
         {selected && (
           <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3">
             <div className="absolute inset-0 bg-black/70" onClick={closeDetails} />
             <div className="relative w-full details-modal bg-[#041018] border border-white/6 rounded p-3 z-10 overflow-y-auto" style={{ maxHeight: '86vh' }}>
-              <button onClick={closeDetails} aria-label="اغلاق" className="absolute top-3 right-3 z-20 bg-white/6 hover:bg-white/10 text-white p-2 rounded-md shadow">✕</button>
-
               <div className="p-3 overflow-auto" style={{ maxHeight: '80vh' }}>
                 <div className="w-full flex items-center justify-center mb-3">
                   {getImageFor(selected) ? (
-                    <Image
-                      src={getImageFor(selected) as string}
-                      alt="صورة المستخدم كبيرة"
-                      width={800}
-                      height={448}
-                      className="w-full max-w-xs h-32 sm:h-40 object-cover rounded-lg border border-white/10 shadow"
-                      unoptimized
-                    />
+                    <div className="w-full max-w-xs sm:max-w-sm">
+                      <Image
+                        src={getImageFor(selected) as string}
+                        alt="صورة المستخدم كبيرة"
+                        width={800}
+                        height={600}
+                        className="w-full h-auto object-contain rounded-lg border border-white/10 shadow"
+                        unoptimized
+                      />
+                    </div>
                   ) : (
-                    <div className="w-full max-w-xs h-32 sm:h-40 bg-white/6 rounded-lg flex items-center justify-center text-white/50">
+                    <div className="w-full max-w-xs h-28 sm:h-36 bg-white/6 rounded-lg flex items-center justify-center text-white/50">
                       لا توجد صورة
                     </div>
                   )}
@@ -556,6 +535,17 @@ export default function SearchSeekerForm() {
                     )}
                   </div>
                 )}
+
+                {/* زر الرجوع في أسفل محتوى المودال */}
+                <div className="mt-3">
+                  <button
+                    onClick={closeDetails}
+                    className="modal-back-bottom"
+                    aria-label="رجوع"
+                  >
+                    ← رجوع
+                  </button>
+                </div>
 
                 <div style={{ height: 14 }} />
               </div>
