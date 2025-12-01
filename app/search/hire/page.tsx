@@ -287,7 +287,6 @@ export default function SearchHirePage() {
   const persistLikeToDb = useCallback(async (id: string, newCount: number) => {
     try {
       const supabase = await getSupabase();
-      // update likes field in DB; if your schema uses another column name adjust accordingly
       await supabase.from('hire_requests').update({ likes: newCount }).eq('id', id);
     } catch (err) {
       console.error('persistLikeToDb error', err);
@@ -297,15 +296,12 @@ export default function SearchHirePage() {
   }, []);
 
   const incrementLike = useCallback((id: string) => {
-    // prevent double-like in same session
     if (likedLocal[String(id)]) return;
 
-    // optimistic UI update
     setHires((prev) =>
       prev.map((h) => {
         if (String(h.id) === String(id)) {
           const newLikes = Number(h.likes ?? 0) + 1;
-          // persist in background
           persistLikeToDb(String(id), newLikes);
           return { ...h, likes: newLikes };
         }
@@ -313,10 +309,8 @@ export default function SearchHirePage() {
       })
     );
 
-    // mark locally liked
     setLikedLocal((s) => ({ ...s, [String(id)]: true }));
 
-    // trigger animation
     setLikeAnimating((s) => ({ ...s, [String(id)]: true }));
     setTimeout(() => {
       setLikeAnimating((s) => ({ ...s, [String(id)]: false }));
@@ -359,7 +353,7 @@ export default function SearchHirePage() {
           .like-animate {
             animation: like-pop 0.45s cubic-bezier(.2,.9,.3,1);
           }
-          /* small burst effect using pseudo-element via wrapper */
+          /* burst effect */
           .like-burst {
             position: relative;
           }
@@ -368,7 +362,7 @@ export default function SearchHirePage() {
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: rgba(16,185,129,0.95);
+            background: rgba(239,68,68,0.95); /* red */
             opacity: 0;
             transform: translate(-50%, -50%) scale(0.6);
             transition: transform 0.35s ease, opacity 0.35s ease;
@@ -394,8 +388,8 @@ export default function SearchHirePage() {
             <div className="w-full sm:w-[520px]">
               <label className="block text-[11px] sm:text-xs text-white/60 mb-2">بحث في العنوان أو المهنة</label>
               <div className="flex gap-2">
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="مثال: مطور ويب، سائق..." className="flex-1 px-3 sm:px-4 py-2 rounded-lg bg-[#0f1721] border border-white/6 focus:border-cyan-400 outline-none transition text-sm" />
-                <button onClick={() => {}} className="px-3 sm:px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white font-medium text-sm">بحث</button>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="مثال: مطور ويب، سائق..." className="flex-1 px-3 sm:px-4 py-2 rounded-lg bg-[#0f1721] border border-white/6 focus:border-red-400 outline-none transition text-sm" />
+                <button onClick={() => {}} className="px-3 sm:px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium text-sm">بحث</button>
               </div>
             </div>
           </header>
@@ -475,7 +469,7 @@ export default function SearchHirePage() {
                           {/* actions row */}
                           <div className="flex items-center justify-between px-1">
                             <div className="flex items-center gap-2">
-                              <button onClick={() => { setSelected(h); setMapKey((k) => k + 1); }} className="px-3 py-1 rounded-md bg-cyan-600 hover:bg-cyan-700 text-xs sm:text-sm">عرض</button>
+                              <button onClick={() => { setSelected(h); setMapKey((k) => k + 1); }} className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700 text-xs sm:text-sm">عرض</button>
 
                               {/* Like button with animation and local persistence */}
                               <div className={`like-burst ${anim ? 'animate' : ''}`}>
@@ -484,7 +478,7 @@ export default function SearchHirePage() {
                                   className={`flex items-center gap-2 px-2 py-1 rounded-md ${anim ? 'like-animate' : ''} bg-white/6 hover:bg-white/10 text-xs sm:text-sm`}
                                   aria-label="اعجبني"
                                 >
-                                  <svg className="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                  <svg className="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M12 21s-6-4.35-9-7.5C-1 9.5 3 4 8 4c2.5 0 3.5 1.5 4 2.5.5-1 1.5-2.5 4-2.5 5 0 9 5.5 5 9.5C18 16.65 12 21 12 21z" />
                                   </svg>
                                   <span>{formatCount(h.likes)}</span>
@@ -522,20 +516,20 @@ export default function SearchHirePage() {
               <div className="bg-[#021617] border border-white/6 rounded p-3">
                 <h3 className="text-sm font-semibold mb-2">خيارات</h3>
                 <button onClick={() => { setQ(''); setCountry(''); setProvince(''); setCity(''); }} className="px-3 py-1 rounded bg-white/6 text-sm">مسح الفلاتر</button>
-                <button onClick={() => fetchHires()} className="ml-2 px-3 py-1 rounded bg-cyan-600 text-sm">تحديث</button>
+                <button onClick={() => fetchHires()} className="ml-2 px-3 py-1 rounded bg-red-600 text-sm">تحديث</button>
               </div>
             </aside>
 
             <div className="md:col-span-2" />
           </section>
 
-          {/* Details modal - luxurious framed design */}
+          {/* Details modal - smaller luxurious framed design */}
           {selected && (
-            <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" style={{ perspective: 1200 }}>
+            <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" style={{ perspective: 1000 }}>
               <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
 
-              <div className="relative w-full max-w-[95vw] sm:max-w-3xl bg-gradient-to-br from-[#07121a] to-[#071827] border border-white/8 rounded-2xl overflow-hidden shadow-[0_30px_80px_rgba(2,6,23,0.8)] z-10 transform-gpu">
-                <div className="absolute -inset-0.5 rounded-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(16,185,129,0.06), rgba(6,182,212,0.04))', filter: 'blur(8px)' }} />
+              <div className="relative w-full max-w-[95vw] sm:max-w-2xl bg-gradient-to-br from-[#07121a] to-[#071827] border border-white/8 rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(2,6,23,0.8)] z-10 transform-gpu">
+                <div className="absolute -inset-0.5 rounded-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(239,68,68,0.06), rgba(6,182,212,0.03))', filter: 'blur(6px)' }} />
 
                 <div className="relative p-3 sm:p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -551,11 +545,11 @@ export default function SearchHirePage() {
                   <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
                     <div className="space-y-3">
                       {safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) ? (
-                        <div className="w-full h-56 sm:h-64 rounded-xl border border-white/6 bg-[#07171b] flex items-center justify-center overflow-auto" style={{ touchAction: 'pinch-zoom' }}>
+                        <div className="w-full h-48 sm:h-56 rounded-xl border border-white/6 bg-[#07171b] flex items-center justify-center overflow-auto" style={{ touchAction: 'pinch-zoom' }}>
                           <Image src={String(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null))} alt="صورة المنشور" width={1200} height={675} className="object-contain max-w-none w-auto h-full" unoptimized />
                         </div>
                       ) : (
-                        <div className="w-full h-56 sm:h-64 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
+                        <div className="w-full h-48 sm:h-56 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
                       )}
 
                       <div className="text-[14px] sm:text-sm text-white/70 space-y-2">
@@ -572,11 +566,11 @@ export default function SearchHirePage() {
                       </div>
                     </div>
 
-                    <div className="h-64 lg:h-full bg-black rounded-xl overflow-hidden border border-white/6">
+                    <div className="h-56 lg:h-full bg-black rounded-xl overflow-hidden border border-white/6">
                       {parseLocation(selected.location) ? (
                         <MapContainer key={mapKey} center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} zoom={13} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
                           <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                          <CircleMarker center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} radius={9} pathOptions={{ color: '#10b981', fillColor: '#10b981', fillOpacity: 0.95 }}>
+                          <CircleMarker center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 }}>
                             <Popup>{selected.profession ?? selected.title ?? 'موقع'} <br /> {selected.location}</Popup>
                           </CircleMarker>
                         </MapContainer>
@@ -587,7 +581,7 @@ export default function SearchHirePage() {
                   </div>
 
                   <div className="mt-4 flex items-center justify-end gap-2">
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? ''))}`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-md bg-cyan-600 hover:bg-cyan-700 text-sm">افتح في الخرائط</a>
+                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? ''))}`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-sm">افتح في الخرائط</a>
                     <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-md bg-white/6 text-sm">إغلاق</button>
                   </div>
                 </div>
