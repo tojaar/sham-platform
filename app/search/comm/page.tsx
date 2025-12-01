@@ -41,8 +41,6 @@ type Comm = {
   [key: string]: unknown;
 };
 
-type LatLng = { lat: number; lng: number };
-
 type LeafletComponents = {
   MapContainer?: React.JSXElementConstructor<unknown>;
   TileLayer?: React.JSXElementConstructor<unknown>;
@@ -150,12 +148,12 @@ export default function SearchCommForm() {
 
       if (error) throw error;
       // ensure likes field exists locally
-      const arr = (data ?? []) as Comm[];
-      setComms(arr.map((r) => ({ ...r, likes: (r as any).likes ?? 0 })));
+      const arr = (data ?? []) as unknown[];
+      setComms(arr.map((r) => ({ ...(r as Comm), likes: (r as Comm).likes ?? 0 })));
     } catch (err: unknown) {
       console.error('fetchComms error', err);
       const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
-      setMessage('تعذر جلب البيانات تأكد من الشبكة: ' + msg);
+      setMessage('تعذر جلب البيانات: ' + msg);
       setComms([]);
     } finally {
       setLoading(false);
@@ -164,7 +162,6 @@ export default function SearchCommForm() {
 
   useEffect(() => {
     fetchComms();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ---------- dynamic leaflet loader (client-only) ---------- */
@@ -482,7 +479,6 @@ export default function SearchCommForm() {
                       <div className="post-header">
                         <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center flex-shrink-0 ml-1">
                           {image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={String(image)} alt="avatar" className="object-cover w-full h-full" />
                           ) : (
                             <div className="text-xs text-white/60">لا صورة</div>
@@ -506,7 +502,6 @@ export default function SearchCommForm() {
 
                         {image && (
                           <div className="post-image bg-[#07171b]">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={String(image)} alt="post image" className="w-full h-auto object-cover" />
                           </div>
                         )}
@@ -562,7 +557,7 @@ export default function SearchCommForm() {
         {/* Details modal */}
         {selected && (
           <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ perspective: 1000 }}>
-            <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
+            <div className="absolute inset-0 bg-black/60" onClick={closeDetails} />
             <div className="relative w-full max-w-[95vw] sm:max-w-2xl bg-[#061017] border border-white/6 rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(2,6,23,0.8)] z-10 transform-gpu">
               <div className="absolute -inset-0.5 rounded-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(239,68,68,0.06), rgba(6,182,212,0.03))', filter: 'blur(6px)' }} />
 
@@ -570,7 +565,6 @@ export default function SearchCommForm() {
                 <div className="flex items-center gap-3">
                   {selected.image_url ? (
                     <div className="w-12 h-12 rounded-md overflow-hidden bg-[#07121a] flex items-center justify-center border border-white/6">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={String(selected.image_url)} alt="شعار" className="w-full h-full object-contain" />
                     </div>
                   ) : (
@@ -584,14 +578,13 @@ export default function SearchCommForm() {
                   </div>
                 </div>
 
-                <button onClick={() => setSelected(null)} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded bg-white/3">✕</button>
+                <button onClick={closeDetails} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded bg-white/3">✕</button>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
                 <div className="space-y-3">
                   {selected.company_logo ? (
                     <div className="w-full h-48 sm:h-56 rounded-xl border border-white/6 bg-[#07171b] overflow-hidden flex items-center justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={String(selected.company_logo)} alt="صورة الإعلان" className="max-w-full max-h-full object-contain" />
                     </div>
                   ) : (
@@ -679,7 +672,7 @@ export default function SearchCommForm() {
                 >
                   افتح في الخرائط
                 </a>
-                <button onClick={() => setSelected(null)} className="px-4 py-2 rounded-md bg-white/6">إغلاق</button>
+                <button onClick={closeDetails} className="px-4 py-2 rounded-md bg-white/6">إغلاق</button>
               </div>
             </div>
           </div>
