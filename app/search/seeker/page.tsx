@@ -6,15 +6,26 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
 
+/**
+ * صفحة الباحثين — ملف كامل
+ * - بطاقات تشبه فيسبوك
+ * - مودال تفاصيل أصغر للهاتف مع إطار غامق وأنيق
+ * - حفظ الإعجابات بشكل متفائل (optimistic) مع استرجاع عند الفشل
+ * - علامة الموقع على الخريطة كنقطة حمراء (CircleMarker)
+ *
+ * استبدل مسار '@/lib/supabase' بمسار Supabase في مشروعك إذا اختلف.
+ */
+
 async function getSupabase() {
   const mod = await import('@/lib/supabase');
   return mod.supabase;
 }
 
-const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
-const CircleMarker = dynamic(() => import('react-leaflet').then(m => m.CircleMarker), { ssr: false });
-const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
+/* Leaflet components (client-only) */
+const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
+const CircleMarker = dynamic(() => import('react-leaflet').then((m) => m.CircleMarker), { ssr: false });
+const Popup = dynamic(() => import('react-leaflet').then((m) => m.Popup), { ssr: false });
 
 type Seeker = {
   id: string;
@@ -26,7 +37,7 @@ type Seeker = {
   province?: string | null;
   city?: string | null;
   address?: string | null;
-  location?: string | null;
+  location?: string | null; // "lat,lng"
   payment_code?: string | null;
   payment_id?: string | null;
   approved?: boolean | null;
@@ -53,9 +64,11 @@ export default function SearchSeekerForm() {
   const [selected, setSelected] = useState<Seeker | null>(null);
   const [showMap, setShowMap] = useState(true);
 
+  // like local state (optimistic + animation)
   const [likedLocal, setLikedLocal] = useState<Record<string, boolean>>({});
   const [likeAnimating, setLikeAnimating] = useState<Record<string, boolean>>({});
 
+  /* ---------- fetchSeekers (client-only supabase) ---------- */
   const fetchSeekers = useCallback(async () => {
     setLoading(true);
     setMessage(null);
@@ -82,18 +95,27 @@ export default function SearchSeekerForm() {
 
   useEffect(() => {
     fetchSeekers();
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [fetchSeekers]);
 
+  /* ---------- derived lists ---------- */
   const countries = useMemo(() => {
     const s = new Set<string>();
-    seekers.forEach((x) => { if (typeof x.country === 'string' && x.country) s.add(x.country); });
+    seekers.forEach((x) => {
+      if (typeof x.country === 'string' && x.country) s.add(x.country);
+    });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [seekers]);
 
   const provinces = useMemo(() => {
     const s = new Set<string>();
-    seekers.filter((x) => (country ? x.country === country : true)).forEach((x) => { if (typeof x.province === 'string' && x.province) s.add(x.province); });
+    seekers
+      .filter((x) => (country ? x.country === country : true))
+      .forEach((x) => {
+        if (typeof x.province === 'string' && x.province) s.add(x.province);
+      });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [seekers, country]);
 
@@ -102,10 +124,13 @@ export default function SearchSeekerForm() {
     seekers
       .filter((x) => (country ? x.country === country : true))
       .filter((x) => (province ? x.province === province : true))
-      .forEach((x) => { if (typeof x.city === 'string' && x.city) s.add(x.city); });
+      .forEach((x) => {
+        if (typeof x.city === 'string' && x.city) s.add(x.city);
+      });
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [seekers, country, province]);
 
+  /* ---------- filtering ---------- */
   const filtered = useMemo(() => {
     const qLower = q.trim().toLowerCase();
     return seekers.filter((s) => {
@@ -117,6 +142,7 @@ export default function SearchSeekerForm() {
     });
   }, [seekers, country, province, city, q]);
 
+  /* ---------- helpers ---------- */
   const getImageFor = (s?: Seeker | null): string | null => {
     if (!s) return null;
     const candidate = s.image_url ?? s.imageUrl ?? s.image ?? null;
@@ -125,7 +151,7 @@ export default function SearchSeekerForm() {
 
   function parseLocation(loc?: string | null) {
     if (!loc) return null;
-    const parts = String(loc).split(',').map(s => s.trim());
+    const parts = String(loc).split(',').map((s) => s.trim());
     if (parts.length !== 2) return null;
     const lat = Number(parts[0]);
     const lng = Number(parts[1]);
@@ -133,35 +159,56 @@ export default function SearchSeekerForm() {
     return { lat, lng };
   }
 
+  /* ---------- persistLikeToDb with result ---------- */
   const persistLikeToDb = useCallback(async (id: string, newCount: number) => {
     try {
       const supabase = await getSupabase();
-      await supabase.from('seeker_requests').update({ likes: newCount }).eq('id', id);
+      const { data, error } = await supabase.from('seeker_requests').update({ likes: newCount }).eq('id', id);
+      if (error) {
+        console.error('Supabase update error', error);
+        return { ok: false, error };
+      }
+      return { ok: true, data };
     } catch (err) {
       console.error('persistLikeToDb error', err);
-      setMessage('تعذر حفظ الإعجاب في الخادم');
-      setTimeout(() => setMessage(null), 2500);
+      return { ok: false, error: err };
     }
   }, []);
 
+  /* ---------- incrementLike (optimistic + rollback on failure) ---------- */
   const incrementLike = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (likedLocal[String(id)]) return;
 
+      // حفظ القيمة القديمة للرجوع عند الفشل
+      let oldLikes = 0;
       setSeekers((prev) =>
         prev.map((h) => {
           if (String(h.id) === String(id)) {
-            const newLikes = Number(h.likes ?? 0) + 1;
-            persistLikeToDb(String(id), newLikes);
-            return { ...h, likes: newLikes };
+            oldLikes = Number(h.likes ?? 0);
+            return { ...h, likes: oldLikes + 1 };
           }
           return h;
         })
       );
 
       setLikedLocal((s) => ({ ...s, [String(id)]: true }));
-
       setLikeAnimating((s) => ({ ...s, [String(id)]: true }));
+
+      const res = await persistLikeToDb(String(id), oldLikes + 1);
+      if (!res.ok) {
+        // فشل الحفظ: ارجع القيمة القديمة وامسح علامة الإعجاب المحلية
+        setSeekers((prev) => prev.map((h) => (String(h.id) === String(id) ? { ...h, likes: oldLikes } : h)));
+        setLikedLocal((s) => {
+          const copy = { ...s };
+          delete copy[String(id)];
+          return copy;
+        });
+        setMessage('تعذر حفظ الإعجاب. حاول مرة أخرى.');
+        setTimeout(() => setMessage(null), 2500);
+      }
+
+      // إيقاف الأنيميشن بعد فترة
       setTimeout(() => {
         setLikeAnimating((s) => ({ ...s, [String(id)]: false }));
       }, 700);
@@ -188,6 +235,7 @@ export default function SearchSeekerForm() {
     return String(v);
   };
 
+  /* ---------- Render ---------- */
   return (
     <>
       <style>{`
@@ -262,9 +310,6 @@ export default function SearchSeekerForm() {
           border-radius: 8px;
           overflow: hidden;
         }
-        .intel-table thead tr {
-          background: linear-gradient(90deg, rgba(6,182,212,0.06), rgba(14,165,233,0.03));
-        }
         .intel-table th, .intel-table td {
           padding: 10px 12px;
           font-size: 0.9rem;
@@ -294,7 +339,6 @@ export default function SearchSeekerForm() {
           font-weight: 600;
         }
 
-        /* small visual polish */
         .intel-badge {
           display:inline-block;
           padding:6px 10px;
@@ -305,8 +349,6 @@ export default function SearchSeekerForm() {
           font-size:0.78rem;
           box-shadow: 0 6px 18px rgba(6,182,212,0.08);
         }
-
-        /* map marker style for CircleMarker is already red via pathOptions */
       `}</style>
 
       <main className="min-h-screen bg-[#071118] text-white antialiased relative">
@@ -344,11 +386,19 @@ export default function SearchSeekerForm() {
                 <label className="text-xs text-white/60">الدولة</label>
                 <select
                   value={country}
-                  onChange={(e) => { setCountry(e.target.value); setProvince(''); setCity(''); }}
+                  onChange={(e) => {
+                    setCountry(e.target.value);
+                    setProvince('');
+                    setCity('');
+                  }}
                   className="w-full mt-1 px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
                 >
                   <option value="">كل الدول</option>
-                  {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {countries.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -356,11 +406,18 @@ export default function SearchSeekerForm() {
                 <label className="text-xs text-white/60">المحافظة</label>
                 <select
                   value={province}
-                  onChange={(e) => { setProvince(e.target.value); setCity(''); }}
+                  onChange={(e) => {
+                    setProvince(e.target.value);
+                    setCity('');
+                  }}
                   className="w-full mt-1 px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
                 >
                   <option value="">كل المحافظات</option>
-                  {provinces.map((p) => <option key={p} value={p}>{p}</option>)}
+                  {provinces.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -372,18 +429,30 @@ export default function SearchSeekerForm() {
                   className="w-full mt-1 px-3 py-2 rounded-md bg-[#071a21] border border-white/6"
                 >
                   <option value="">كل المدن</option>
-                  {cities.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {cities.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="flex gap-2 items-end">
                 <button
-                  onClick={() => { setCountry(''); setProvince(''); setCity(''); setQ(''); fetchSeekers(); }}
+                  onClick={() => {
+                    setCountry('');
+                    setProvince('');
+                    setCity('');
+                    setQ('');
+                    fetchSeekers();
+                  }}
                   className="px-4 py-2 text-sm rounded-md bg-white/6 hover:bg-white/10"
                 >
                   إعادة الضبط
                 </button>
-                <div className="text-sm text-white/60 mt-1">النتائج: <span className="font-medium">{filtered.length}</span></div>
+                <div className="text-sm text-white/60 mt-1">
+                  النتائج: <span className="font-medium">{filtered.length}</span>
+                </div>
               </div>
             </div>
           </section>
@@ -414,11 +483,12 @@ export default function SearchSeekerForm() {
                             <div className="min-w-0">
                               <div className="text-sm font-semibold truncate">{s.name ?? s.profession ?? '—'}</div>
                               <div className="text-xs text-white/60 truncate">{s.profession ?? '—'}</div>
-                              <div className="text-xs text-white/50 truncate mt-1">{s.city ?? '—'}{s.province ? ` • ${s.province}` : ''}</div>
+                              <div className="text-xs text-white/50 truncate mt-1">
+                                {s.city ?? '—'}
+                                {s.province ? ` • ${s.province}` : ''}
+                              </div>
                             </div>
-                            <div className="text-xs text-white/60 text-right">
-                              {s.created_at ? new Date(s.created_at).toLocaleString() : ''}
-                            </div>
+                            <div className="text-xs text-white/60 text-right">{s.created_at ? new Date(s.created_at).toLocaleString() : ''}</div>
                           </div>
                         </div>
                       </div>
@@ -448,7 +518,10 @@ export default function SearchSeekerForm() {
 
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={(e) => { e.stopPropagation(); openDetails(s); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDetails(s);
+                            }}
                             className="px-3 py-1 rounded-md bg-white/6 hover:bg-white/10 text-sm"
                           >
                             عرض التفاصيل
@@ -489,23 +562,13 @@ export default function SearchSeekerForm() {
                 <div className="w-full flex items-center justify-center mb-3">
                   {getImageFor(selected) ? (
                     <div className="details-image w-full max-w-xs">
-                      <Image
-                        src={getImageFor(selected) as string}
-                        alt="صورة المستخدم كبيرة"
-                        width={800}
-                        height={600}
-                        className="w-full h-auto object-contain rounded-lg"
-                        unoptimized
-                      />
+                      <Image src={getImageFor(selected) as string} alt="صورة المستخدم كبيرة" width={800} height={600} className="w-full h-auto object-contain rounded-lg" unoptimized />
                     </div>
                   ) : (
-                    <div className="w-full max-w-xs h-36 bg-white/6 rounded-lg flex items-center justify-center text-white/50">
-                      لا توجد صورة
-                    </div>
+                    <div className="w-full max-w-xs h-36 bg-white/6 rounded-lg flex items-center justify-center text-white/50">لا توجد صورة</div>
                   )}
                 </div>
 
-                {/* Intelligence-style table */}
                 <table className="intel-table" role="table" aria-label="تفاصيل الباحث">
                   <tbody>
                     <tr>
@@ -580,9 +643,7 @@ export default function SearchSeekerForm() {
                         </CircleMarker>
                       </MapContainer>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-center p-4 text-white/70">
-                        لا توجد إحداثيات صحيحة للعرض
-                      </div>
+                      <div className="w-full h-full flex items-center justify-center text-center p-4 text-white/70">لا توجد إحداثيات صحيحة للعرض</div>
                     )}
                   </div>
                 )}
@@ -599,8 +660,7 @@ export default function SearchSeekerForm() {
               </div>
             </div>
           </div>
-        )}
-      </main>
+        )}</main>
     </>
   );
 }
