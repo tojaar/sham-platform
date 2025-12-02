@@ -6,16 +6,11 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
 
-/**
- * استيراد Supabase ديناميكيًا داخل الدوال التي تعمل على جهة العميل فقط
- * لتجنّب إنشاء العميل أثناء SSR/prerender (يمنع خطأ "supabaseKey is required").
- */
 async function getSupabase() {
   const mod = await import('@/lib/supabase');
   return mod.supabase;
 }
 
-/* Leaflet components (client-only) */
 const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const CircleMarker = dynamic(() => import('react-leaflet').then(m => m.CircleMarker), { ssr: false });
@@ -31,7 +26,7 @@ type Seeker = {
   province?: string | null;
   city?: string | null;
   address?: string | null;
-  location?: string | null; // "lat,lng"
+  location?: string | null;
   payment_code?: string | null;
   payment_id?: string | null;
   approved?: boolean | null;
@@ -58,11 +53,9 @@ export default function SearchSeekerForm() {
   const [selected, setSelected] = useState<Seeker | null>(null);
   const [showMap, setShowMap] = useState(true);
 
-  // like local state (optimistic)
   const [likedLocal, setLikedLocal] = useState<Record<string, boolean>>({});
   const [likeAnimating, setLikeAnimating] = useState<Record<string, boolean>>({});
 
-  /* ---------- fetchSeekers (client-only supabase) ---------- */
   const fetchSeekers = useCallback(async () => {
     setLoading(true);
     setMessage(null);
@@ -92,7 +85,6 @@ export default function SearchSeekerForm() {
     return () => { document.body.style.overflow = ''; };
   }, [fetchSeekers]);
 
-  /* ---------- derived lists ---------- */
   const countries = useMemo(() => {
     const s = new Set<string>();
     seekers.forEach((x) => { if (typeof x.country === 'string' && x.country) s.add(x.country); });
@@ -114,7 +106,6 @@ export default function SearchSeekerForm() {
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [seekers, country, province]);
 
-  /* ---------- filtering ---------- */
   const filtered = useMemo(() => {
     const qLower = q.trim().toLowerCase();
     return seekers.filter((s) => {
@@ -126,7 +117,6 @@ export default function SearchSeekerForm() {
     });
   }, [seekers, country, province, city, q]);
 
-  /* ---------- helpers ---------- */
   const getImageFor = (s?: Seeker | null): string | null => {
     if (!s) return null;
     const candidate = s.image_url ?? s.imageUrl ?? s.image ?? null;
@@ -143,7 +133,6 @@ export default function SearchSeekerForm() {
     return { lat, lng };
   }
 
-  /* ---------- like handler (optimistic + persist) ---------- */
   const persistLikeToDb = useCallback(async (id: string, newCount: number) => {
     try {
       const supabase = await getSupabase();
@@ -199,11 +188,10 @@ export default function SearchSeekerForm() {
     return String(v);
   };
 
-  /* ---------- Render ---------- */
   return (
     <>
       <style>{`
-        /* small visual tweaks to make posts look like Facebook-style cards */
+        /* Facebook-like post cards */
         .fb-card {
           background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
           border-radius: 12px;
@@ -214,7 +202,6 @@ export default function SearchSeekerForm() {
         .fb-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px rgba(2,6,23,0.65); }
         .fb-sep { height: 12px; }
 
-        /* bottom action bar inside each post */
         .post-actions-bar {
           display:flex;
           align-items:center;
@@ -237,30 +224,89 @@ export default function SearchSeekerForm() {
         }
         .action-btn:hover { background: rgba(255,255,255,0.02); transform: translateY(-2px); }
 
-        /* details modal smaller and framed for mobile */
+        /* details modal darker elegant backdrop */
+        .details-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(2,6,23,0.92);
+          backdrop-filter: blur(6px) saturate(1.05);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 50;
+          padding: 16px;
+        }
+
         .details-frame {
           width:100%;
           max-width: 360px;
           border-radius: 14px;
-          padding: 12px;
-          background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
-          border: 1px solid rgba(255,255,255,0.06);
-          box-shadow: 0 18px 40px rgba(2,6,23,0.75);
+          padding: 14px;
+          background: linear-gradient(180deg, #071018, #0b1220);
+          border: 1px solid rgba(255,255,255,0.04);
+          box-shadow: 0 22px 60px rgba(2,6,23,0.8), inset 0 1px 0 rgba(255,255,255,0.01);
           overflow: hidden;
         }
         @media (min-width: 640px) {
           .details-frame { max-width: 520px; }
         }
 
-        .details-image { border-radius: 10px; border:1px solid rgba(255,255,255,0.06); background:#061216; padding:6px; }
+        .details-image { border-radius: 10px; border:1px solid rgba(255,255,255,0.03); background:#061216; padding:6px; }
 
-        .map-point {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: #ef4444;
-          box-shadow: 0 0 6px rgba(239,68,68,0.9);
+        /* Intelligence-style table */
+        .intel-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 12px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+          border-radius: 8px;
+          overflow: hidden;
         }
+        .intel-table thead tr {
+          background: linear-gradient(90deg, rgba(6,182,212,0.06), rgba(14,165,233,0.03));
+        }
+        .intel-table th, .intel-table td {
+          padding: 10px 12px;
+          font-size: 0.9rem;
+          vertical-align: middle;
+        }
+        .intel-table th {
+          text-align: left;
+          color: rgba(255,255,255,0.75);
+          font-size: 0.72rem;
+          text-transform: uppercase;
+          letter-spacing: 0.9px;
+        }
+        .intel-table td {
+          color: #e6eef6;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+          background: rgba(255,255,255,0.01);
+          border-top: 1px solid rgba(255,255,255,0.02);
+        }
+        .intel-key {
+          width: 40%;
+          color: rgba(255,255,255,0.65);
+          font-weight: 700;
+        }
+        .intel-val {
+          width: 60%;
+          color: #dbeafe;
+          font-weight: 600;
+        }
+
+        /* small visual polish */
+        .intel-badge {
+          display:inline-block;
+          padding:6px 10px;
+          border-radius:8px;
+          background: linear-gradient(90deg,#0ea5e9,#06b6d4);
+          color:#02121a;
+          font-weight:800;
+          font-size:0.78rem;
+          box-shadow: 0 6px 18px rgba(6,182,212,0.08);
+        }
+
+        /* map marker style for CircleMarker is already red via pathOptions */
       `}</style>
 
       <main className="min-h-screen bg-[#071118] text-white antialiased relative">
@@ -353,7 +399,6 @@ export default function SearchSeekerForm() {
               <ul className="space-y-3 pb-8">
                 {filtered.map((s) => (
                   <li key={s.id}>
-                    {/* Facebook-like post card */}
                     <article className="fb-card p-4 flex flex-col gap-3">
                       <div className="flex items-start gap-3">
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
@@ -387,7 +432,6 @@ export default function SearchSeekerForm() {
                         )}
                       </div>
 
-                      {/* bottom action bar (like / interact + details) */}
                       <div className="post-actions-bar">
                         <div className="flex items-center gap-2">
                           <button
@@ -421,10 +465,9 @@ export default function SearchSeekerForm() {
           </section>
         </div>
 
-        {/* Details Modal (smaller for phone, framed nicely) */}
+        {/* Details Modal darker elegant backdrop with intelligence table */}
         {selected && (
-          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3">
-            <div className="absolute inset-0 bg-black/60" onClick={closeDetails} />
+          <div className="details-overlay" role="dialog" aria-modal="true">
             <div className="details-frame relative z-10">
               <button
                 onClick={closeDetails}
@@ -435,6 +478,14 @@ export default function SearchSeekerForm() {
               </button>
 
               <div className="overflow-auto" style={{ maxHeight: '82vh' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <div className="text-base font-bold">{selected.profession ?? '—'}</div>
+                    <div className="text-sm text-white/70 mt-1">{selected.name ?? '—'}</div>
+                  </div>
+                  <div className="intel-badge">ملف استخباراتي</div>
+                </div>
+
                 <div className="w-full flex items-center justify-center mb-3">
                   {getImageFor(selected) ? (
                     <div className="details-image w-full max-w-xs">
@@ -454,24 +505,55 @@ export default function SearchSeekerForm() {
                   )}
                 </div>
 
-                <h2 className="text-base font-bold">{selected.profession ?? '—'}</h2>
-                <p className="text-sm text-white/70 mt-1">{selected.name ?? '—'}</p>
+                {/* Intelligence-style table */}
+                <table className="intel-table" role="table" aria-label="تفاصيل الباحث">
+                  <tbody>
+                    <tr>
+                      <th className="intel-key">المعرف</th>
+                      <td className="intel-val">{selected.id}</td>
+                    </tr>
 
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-white/80">
-                  <div className="space-y-2">
-                    <div><strong>الهاتف:</strong> <span className="text-white/70 ml-2">{selected.phone ?? '—'}</span></div>
-                    <div><strong>العمر:</strong> <span className="text-white/70 ml-2">{(() => { const ageVal = (selected as Record<string, unknown>)['age']; return typeof ageVal === 'number' || typeof ageVal === 'string' ? ageVal : '—'; })()}</span></div>
-                    <div><strong>الشهادات:</strong> <span className="text-white/70 ml-2">{selected.certificates ?? '—'}</span></div>
-                    <div><strong>مكان السكن:</strong> <span className="text-white/70 ml-2">{selected.address ?? '—'}</span></div>
-                  </div>
+                    <tr>
+                      <th className="intel-key">الحالة</th>
+                      <td className="intel-val">{selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : selected.status ?? 'بانتظار'}</td>
+                    </tr>
 
-                  <div className="space-y-2">
-                    <div><strong>المدينة:</strong> <span className="text-white/70 ml-2">{selected.city ?? '—'}</span></div>
-                    <div><strong>المحافظة:</strong> <span className="text-white/70 ml-2">{selected.province ?? '—'}</span></div>
-                    <div><strong>الدولة:</strong> <span className="text-white/70 ml-2">{selected.country ?? '—'}</span></div>
-                    <div><strong>الحالة:</strong> <span className="text-white/70 ml-2">{selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : selected.status ?? 'بانتظار'}</span></div>
-                  </div>
-                </div>
+                    <tr>
+                      <th className="intel-key">الهاتف</th>
+                      <td className="intel-val">{selected.phone ?? '—'}</td>
+                    </tr>
+
+                    <tr>
+                      <th className="intel-key">العمر</th>
+                      <td className="intel-val">{(() => { const a = (selected as Record<string, unknown>)['age']; return typeof a === 'number' || typeof a === 'string' ? a : '—'; })()}</td>
+                    </tr>
+
+                    <tr>
+                      <th className="intel-key">الشهادات</th>
+                      <td className="intel-val">{selected.certificates ?? '—'}</td>
+                    </tr>
+
+                    <tr>
+                      <th className="intel-key">العنوان</th>
+                      <td className="intel-val">{selected.address ?? '—'}</td>
+                    </tr>
+
+                    <tr>
+                      <th className="intel-key">الموقع</th>
+                      <td className="intel-val">{(selected.city ?? '—') + (selected.province ? ` • ${selected.province}` : '') + (selected.country ? ` • ${selected.country}` : '')}</td>
+                    </tr>
+
+                    <tr>
+                      <th className="intel-key">تاريخ الإنشاء</th>
+                      <td className="intel-val">{selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</td>
+                    </tr>
+
+                    <tr>
+                      <th className="intel-key">إعجابات</th>
+                      <td className="intel-val">{formatCount(selected.likes)}</td>
+                    </tr>
+                  </tbody>
+                </table>
 
                 <div className="mt-4 flex items-center gap-2 justify-end">
                   <button onClick={() => setShowMap((v) => !v)} className="px-3 py-2 rounded-md bg-white/6 hover:bg-white/10 text-sm">
