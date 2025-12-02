@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import 'leaflet/dist/leaflet.css';
 
 type CommPayload = {
   category: string;
@@ -27,13 +26,6 @@ type CommPayload = {
 };
 
 type LatLng = { lat: number; lng: number };
-
-type LeafletAPI = {
-  MapContainer?: React.JSXElementConstructor<unknown>;
-  TileLayer?: React.JSXElementConstructor<unknown>;
-  Marker?: React.JSXElementConstructor<unknown>;
-  useMapEvents?: (handlers: { click: (e: { latlng: LatLng }) => void }) => void;
-};
 
 /* ---------- Utilities ---------- */
 
@@ -97,11 +89,6 @@ export default function PostAdPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  const [leafletReady, setLeafletReady] = useState(false);
-  const leafletRef = useRef<LeafletAPI | null>(null);
-  const mapRef = useRef<unknown>(null);
-
-  // payment selection state (null | 'sham' | 'usdt')
   const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
 
   // sample payment links (replace with real links)
@@ -128,85 +115,6 @@ export default function PostAdPage() {
     }
   }, [logoFile]);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      if (typeof window === 'undefined') return;
-
-      try {
-        // inject leaflet CSS once (safe for SSR)
-        if (typeof document !== 'undefined' && !document.querySelector('link[data-leaflet-css]')) {
-          const link = document.createElement('link') as HTMLLinkElement;
-          link.rel = 'stylesheet';
-          link.dataset.leafletCss = '1';
-          try {
-            link.href = new URL('leaflet/dist/leaflet.css', import.meta.url).toString();
-          } catch {
-            link.href = '/node_modules/leaflet/dist/leaflet.css';
-          }
-          await new Promise<void>((resolve) => {
-            link.onload = () => resolve();
-            link.onerror = () => resolve();
-            document.head.appendChild(link);
-          });
-        }
-
-        const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
-
-        // Access Icon.Default safely via unknown + Reflect to avoid incompatible cast errors
-        const leafletUnknown: unknown = leafletModule;
-        try {
-          if (leafletUnknown && typeof leafletUnknown === 'object') {
-            const Icon = Reflect.get(leafletUnknown as object, 'Icon') as unknown;
-            if (Icon && typeof Icon === 'object') {
-              const Default = Reflect.get(Icon as object, 'Default') as unknown;
-              if (Default && typeof Default === 'object') {
-                const proto = Reflect.get(Default as object, 'prototype') as Record<string, unknown> | undefined;
-                if (proto && '_getIconUrl' in proto) {
-                  Reflect.deleteProperty(proto, '_getIconUrl');
-                }
-                const mergeOptions = Reflect.get(Default as object, 'mergeOptions') as ((opts: Record<string, string>) => void) | undefined;
-                mergeOptions?.({
-                  iconRetinaUrl: new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString(),
-                  iconUrl: new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString(),
-                  shadowUrl: new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString(),
-                });
-              }
-            }
-          }
-        } catch (err) {
-          console.warn('leaflet icon fix failed', err);
-        }
-
-        // store runtime components as JSX constructors (unknown props allowed)
-        leafletRef.current = {
-          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<unknown>,
-          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<unknown>,
-          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<unknown>,
-          useMapEvents: (reactLeafletModule as Record<string, unknown>).useMapEvents as (handlers: { click: (e: { latlng: LatLng }) => void }) => void,
-        };
-
-        if (mounted) setLeafletReady(true);
-      } catch (err) {
-        console.error('failed loading leaflet/react-leaflet', err);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const LocationPicker = ({ onSet }: { onSet: (c: LatLng) => void }) => {
-    const u = leafletRef.current?.useMapEvents;
-    if (!u) return null;
-    u({
-      click(e: { latlng: LatLng }) {
-        onSet({ lat: e.latlng.lat, lng: e.latlng.lng });
-      },
-    });
-    return null;
-  };
-
   const validate = () => {
     setMessage(null);
     if (isCompany && !companyName.trim()) {
@@ -218,11 +126,11 @@ export default function PostAdPage() {
       return false;
     }
     if (!country.trim() && !province.trim() && !city.trim()) {
-      setMessage('الرجاء تزويد الدولة والمحافظة والمدينة');
+      setMessage('الرجاء تزويد الدولة أو المحافظة أو المدينة');
       return false;
     }
     if (!coords) {
-      setMessage('الرجاء اختيار الموقع على الخريطة');
+      setMessage('الرجاء إدخال الإحداثيات أو استخدام "تحديد الموقع تلقائياً"');
       return false;
     }
     if (phone && phone.trim().length < 5) {
@@ -232,7 +140,6 @@ export default function PostAdPage() {
     return true;
   };
 
-  // copy to clipboard helper (used by payment buttons)
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -244,20 +151,15 @@ export default function PostAdPage() {
     }
   };
 
-  // toggle payment selection and clear the other field
   const togglePayment = (method: 'sham' | 'usdt') => {
     setSelectedPayment((prev) => {
       const next = prev === method ? null : method;
-      if (next === 'sham') {
-        setPaymentId(''); // clear USDT
-      } else if (next === 'usdt') {
-        setPaymentCode(''); // clear Sham
-      }
+      if (next === 'sham') setPaymentId('');
+      if (next === 'usdt') setPaymentCode('');
       return next;
     });
   };
 
-  // handle company checkbox toggle: show/hide logo upload and clear when hiding
   const handleCompanyToggle = (checked: boolean) => {
     setIsCompany(checked);
     if (!checked) {
@@ -266,6 +168,29 @@ export default function PostAdPage() {
     }
   };
 
+  // allow user to auto-detect location via browser geolocation (optional)
+  const detectLocation = async () => {
+    setMessage(null);
+    if (!navigator.geolocation) {
+      setMessage('المتصفح لا يدعم تحديد الموقع');
+      return;
+    }
+    setMessage('جاري تحديد الموقع...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setMessage('تم تحديد الموقع');
+        setTimeout(() => setMessage(null), 1500);
+      },
+      (err) => {
+        console.error(err);
+        setMessage('فشل تحديد الموقع: ' + (err.message || 'خطأ'));
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // === التغيير الرئيسي: السماح بالحفظ بدون تسجيل نهائياً ===
   const handleSubmit = async () => {
     setMessage(null);
     if (!validate()) return;
@@ -277,37 +202,30 @@ export default function PostAdPage() {
       const imageUrl = imageFile ? await uploadToImgbb(imageFile) : null;
       const logoUrl = logoFile ? await uploadToImgbb(logoFile) : null;
 
-      // create supabase client at runtime (client-only)
       const supabase = await getSupabase();
 
-      // ensure user is authenticated
-      const { data: userData } = await supabase.auth.getUser();
-      const user = userData?.user;
-      if (!user) {
-        setMessage('تحتاج لتسجيل الدخول أولاً');
-        setLoading(false);
-        return;
-      }
+      // لا نتحقق من جلسة المستخدم نهائياً — نحفظ كمجهول (created_by = null)
+      const finalUserId: string | null = null;
 
       const payload: CommPayload = {
         category,
         name: isCompany ? companyName.trim() : personName.trim(),
-        phone: phone || null,
+        phone: phone?.trim() || null,
         is_company: isCompany,
         company_logo: logoUrl ?? null,
         image_url: imageUrl ?? null,
-        country: country || null,
-        province: province || null,
-        city: city || null,
-        address: address || null,
+        country: country?.trim() || null,
+        province: province?.trim() || null,
+        city: city?.trim() || null,
+        address: address?.trim() || null,
         location_lat: coords?.lat ?? null,
         location_lng: coords?.lng ?? null,
-        price: price || null,
-        description: description || null,
-        payment_code: paymentCode || null,
-        payment_id: paymentId || null,
+        price: price?.trim() || null,
+        description: description?.trim() || null,
+        payment_code: paymentCode?.trim() || null,
+        payment_id: paymentId?.trim() || null,
         approved: false,
-        created_by: user.id,
+        created_by: finalUserId,
       };
 
       const { error } = await supabase.from('ads').insert([payload]);
@@ -394,10 +312,11 @@ export default function PostAdPage() {
     } as React.CSSProperties,
     mapWrap: {
       width: '100%',
-      height: 320,
       borderRadius: 10,
       overflow: 'hidden',
       border: '1px solid rgba(255,255,255,0.04)',
+      padding: 12,
+      background: 'rgba(6,19,30,0.45)',
     } as React.CSSProperties,
   };
 
@@ -423,16 +342,11 @@ export default function PostAdPage() {
         .reset-btn { padding:10px 14px; background:transparent; border:1px solid rgba(255,255,255,0.06); color:#cfeff7; border-radius:10px; cursor:pointer; }
         .message { margin-top:8px; color:#fff; text-align:center; }
 
-        /* make name input larger on small screens and improve touch targets */
         .name-input { min-width: 160px; }
         @media (max-width: 720px) {
           .two-col { grid-template-columns: 1fr; }
-          .map-wrap-mobile { height: 220px !important; }
-          .previewBox { width:72px; height:72px; }
           .title { font-size:18px; }
           .btnPrimaryMobile { width:100%; }
-
-          /* larger, more comfortable inputs on mobile */
           .merchant-page input,
           .merchant-page textarea,
           .merchant-page select,
@@ -441,7 +355,6 @@ export default function PostAdPage() {
             font-size: 16px;
             padding: 14px;
           }
-
           .name-input {
             font-size: 18px;
             padding: 14px;
@@ -452,7 +365,7 @@ export default function PostAdPage() {
       <div style={styles.container}>
         <div className="top-row">
           <div className="title">📣 أنشر إعلانك</div>
-          <div style={{ fontSize: 12, color: '#9fb3c9' }}>واجهة محسّنة للهواتف مع تجربة دفع مريحة</div>
+          <div style={{ fontSize: 12, color: '#9fb3c9' }}>يمكن حفظ الإعلان دون تسجيل دخول</div>
         </div>
 
         <div className="merchant-grid">
@@ -496,7 +409,6 @@ export default function PostAdPage() {
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={{ ...styles.input, maxWidth: 220 }} />
           </div>
 
-          {/* show logo upload only when company is selected */}
           {isCompany && (
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ flex: 1 }}>
@@ -513,7 +425,6 @@ export default function PostAdPage() {
               </div>
 
               <div style={styles.previewBox as React.CSSProperties} className="previewBox">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 {logoPreview ? <img src={logoPreview} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة شعار</div>}
               </div>
             </div>
@@ -526,59 +437,41 @@ export default function PostAdPage() {
             <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="العنوان" style={styles.input} />
           </div>
 
+          {/* Map-free coordinates input (no external file required) */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 12, color: '#9fb3c9' }}>📍 اختر الموقع على الخريطة (انقر لتعيين)</div>
+              <div style={{ fontSize: 12, color: '#9fb3c9' }}>📍 الإحداثيات (يمكن إدخالها يدوياً أو تحديد الموقع تلقائياً)</div>
               {coords ? <div style={{ fontSize: 13, color: '#bfeffd' }}>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</div> : null}
             </div>
-            <div style={{ ...styles.mapWrap }} className="map-wrap-mobile">
-              {!leafletReady || !leafletRef.current ? (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bcdfe7', padding: 12 }}>
-                  تحميل مكوّن الخريطة...
-                </div>
-              ) : (
-                (() => {
-                  const MapContainerComp = leafletRef.current?.MapContainer;
-                  const TileLayerComp = leafletRef.current?.TileLayer;
-                  const MarkerComp = leafletRef.current?.Marker;
 
-                  if (!MapContainerComp || !TileLayerComp || !MarkerComp) {
-                    return (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bcdfe7', padding: 12 }}>
-                        تحميل مكوّن الخريطة...
-                      </div>
-                    );
-                  }
-
-                  const mapProps: unknown = {
-                    whenCreated: (m: unknown) => {
-                      mapRef.current = m;
-                      setTimeout(() => {
-                        try {
-                          (m as { invalidateSize?: () => void }).invalidateSize?.();
-                        } catch {}
-                      }, 120);
-                    },
-                    center: [33.3128, 44.3615],
-                    zoom: 6,
-                    style: { width: '100%', height: '100%' },
-                  };
-
-                  const tileProps: unknown = { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' };
-                  const locationPickerProps: unknown = { onSet: (c: LatLng) => setCoords(c) };
-                  const markerProps: unknown = coords ? { position: [coords.lat, coords.lng] } : undefined;
-
-                  return React.createElement(
-                    MapContainerComp as React.JSXElementConstructor<unknown>,
-                    mapProps,
-                    React.createElement(TileLayerComp as React.JSXElementConstructor<unknown>, tileProps),
-                    React.createElement(LocationPicker as React.JSXElementConstructor<unknown>, locationPickerProps),
-                    coords ? React.createElement(MarkerComp as React.JSXElementConstructor<unknown>, markerProps as unknown) : null
-                  );
-                })()
-              )}
+            <div style={styles.mapWrap}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                <input
+                  value={coords?.lat ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCoords((prev) => ({ lat: v === '' ? (prev?.lat ?? 0) : Number(v), lng: prev?.lng ?? 0 }));
+                  }}
+                  placeholder="خط العرض (مثال: 33.3128)"
+                  style={{ ...styles.input, maxWidth: 220 }}
+                />
+                <input
+                  value={coords?.lng ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setCoords((prev) => ({ lat: prev?.lat ?? 0, lng: v === '' ? (prev?.lng ?? 0) : Number(v) }));
+                  }}
+                  placeholder="خط الطول (مثال: 44.3615)"
+                  style={{ ...styles.input, maxWidth: 220 }}
+                />
+                <button type="button" onClick={detectLocation} style={{ padding: '10px 12px', borderRadius: 8, cursor: 'pointer' }} className="copy-btn">
+                  تحديد الموقع تلقائياً
+                </button>
+                <div style={{ fontSize: 12, color: '#9fb3c9' }}>أدخل الإحداثيات بدقة أو استخدم الزر أعلاه</div>
+              </div>
             </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: '#9fb3c9' }}>اضغط على الخريطة لاختيار الإحداثيات بدقة</div>
+
+            <div style={{ marginTop: 8, fontSize: 12, color: '#9fb3c9' }}>يمكنك ترك الحقول فارغة لكن يجب إدخال الإحداثيات قبل الحفظ</div>
           </div>
 
           <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="السعر (اختياري)" style={styles.input} />
@@ -594,14 +487,11 @@ export default function PostAdPage() {
             </div>
 
             <div style={styles.previewBox as React.CSSProperties}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               {imagePreview ? <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <div style={{ color: '#7f9fb6', fontSize: 12 }}>معاينة الصورة</div>}
             </div>
           </div>
 
-          {/* Payment inputs and payment buttons */}
           <div className="two-col">
-            {/* Inputs are shown only when a payment method is selected */}
             {selectedPayment === 'sham' ? (
               <input value={paymentCode} onChange={(e) => setPaymentCode(e.target.value)} placeholder="رمز الدفع (مثال: شام كاش 10000)" style={styles.input} />
             ) : (
@@ -661,14 +551,13 @@ export default function PostAdPage() {
             </div>
           </div>
 
-          {/* Payment detail panels (only visible when selected) */}
           {selectedPayment === 'sham' && (
             <div className="payment-panel sham-panel payment-panel">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                 <div>
                   <div style={{ fontWeight: 800 }}>دفع شام كاش</div>
                   <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
-                    <div>1. انسخ رابط شام بالضغط على زر &quot;نسخ رابط شام&quot;.</div>
+                    <div>1. انسخ رابط شام بالضغط على زر "نسخ رابط شام".</div>
                     <div>2. افتح الرابط في متصفحك أو تطبيق شام كاش واتبع خطوات الدفع.</div>
                     <div>3. احتفظ برقم الإيصال أو رمز الدفع بعد إتمام العملية.</div>
                     <div>4. عد إلى هذا النموذج وأدخل رمز الدفع في الحقل المخصص أعلاه.</div>
@@ -695,7 +584,7 @@ export default function PostAdPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>دفع USDT (TRC20)</div>
                   <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
-                    <div>1. انسخ رابط USDT أو العنوان بالضغط على &quot;نسخ رابط USDT&quot;.</div>
+                    <div>1. انسخ رابط USDT أو العنوان بالضغط على "نسخ رابط USDT".</div>
                     <div>2. افتح محفظتك وتأكد من اختيار شبكة TRC20 قبل الإرسال.</div>
                     <div>3. أرسل المبلغ إلى العنوان الظاهر في الرابط أو المحفظة.</div>
                     <div>4. بعد تأكيد المعاملة انسخ TXID أو معرف المعاملة.</div>
