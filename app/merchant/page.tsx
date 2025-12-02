@@ -99,7 +99,7 @@ export default function PostAdPage() {
 
   const [leafletReady, setLeafletReady] = useState(false);
   const leafletRef = useRef<LeafletAPI | null>(null);
-  const leafletLibRef = useRef<any>(null);
+  const leafletLibRef = useRef<Record<string, unknown> | null>(null);
   const mapRef = useRef<unknown>(null);
 
   // payment selection state (null | 'sham' | 'usdt')
@@ -153,14 +153,17 @@ export default function PostAdPage() {
         }
 
         const [leafletModule, reactLeafletModule] = await Promise.all([import('leaflet'), import('react-leaflet')]);
-        leafletLibRef.current = leafletModule;
 
-        // store runtime components
+        // store leaflet library reference as a generic record to avoid explicit any
+        leafletLibRef.current = leafletModule as unknown as Record<string, unknown>;
+
+        // store runtime components as JSX constructors (unknown props allowed)
+        const reactLeafletRecord = reactLeafletModule as unknown as Record<string, unknown>;
         leafletRef.current = {
-          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<unknown>,
-          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<unknown>,
-          Marker: (reactLeafletModule as Record<string, unknown>).Marker as React.JSXElementConstructor<unknown>,
-          useMapEvents: (reactLeafletModule as Record<string, unknown>).useMapEvents as (handlers: { click: (e: { latlng: LatLng }) => void }) => void,
+          MapContainer: reactLeafletRecord.MapContainer as React.JSXElementConstructor<unknown>,
+          TileLayer: reactLeafletRecord.TileLayer as React.JSXElementConstructor<unknown>,
+          Marker: reactLeafletRecord.Marker as React.JSXElementConstructor<unknown>,
+          useMapEvents: reactLeafletRecord.useMapEvents as (handlers: { click: (e: { latlng: LatLng }) => void }) => void,
         };
 
         if (mounted) setLeafletReady(true);
@@ -461,7 +464,6 @@ export default function PostAdPage() {
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="رقم الهاتف (اختياري)" style={{ ...styles.input, maxWidth: 220 }} />
           </div>
 
-          {/* شعار الشركة عند اختيار شركة */}
           {isCompany && (
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <div style={{ flex: 1 }}>
@@ -484,7 +486,6 @@ export default function PostAdPage() {
             </div>
           )}
 
-          {/* العنوان والموقع */}
           <div className="two-col">
             <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="الدولة" style={styles.input} />
             <input value={province} onChange={(e) => setProvince(e.target.value)} placeholder="المحافظة" style={styles.input} />
@@ -533,17 +534,26 @@ export default function PostAdPage() {
                   const tileProps: unknown = { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' };
                   const locationPickerProps: unknown = { onSet: (c: LatLng) => setCoords(c) };
 
-                  // نقطة حمراء أساسية باستخدام DivIcon (بدون صور)
+                  // نقطة حمراء أساسية باستخدام DivIcon (بدون صور) — إنشاء الأيقونة بأمان دون استخدام any
                   const markerProps: unknown = coords
-                    ? {
-                        position: [coords.lat, coords.lng],
-                        icon: new leafletLibRef.current.DivIcon({
-                          className: 'custom-red-marker',
-                          html: '<div style="width:14px;height:14px;background:#e11; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 2px rgba(0,0,0,0.25)"></div>',
-                          iconSize: [14, 14],
-                          iconAnchor: [7, 7],
-                        }),
-                      }
+                    ? (() => {
+                        const leafletRecord = leafletLibRef.current;
+                        const DivIconCtor = (leafletRecord?.DivIcon as unknown) as (new (opts: Record<string, unknown>) => unknown) | undefined;
+
+                        const iconInstance = DivIconCtor
+                          ? new DivIconCtor({
+                              className: 'custom-red-marker',
+                              html: '<div style="width:14px;height:14px;background:#e11;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,0.25)"></div>',
+                              iconSize: [14, 14],
+                              iconAnchor: [7, 7],
+                            })
+                          : undefined;
+
+                        return {
+                          position: [coords.lat, coords.lng],
+                          ...(iconInstance ? { icon: iconInstance } : {}),
+                        };
+                      })()
                     : undefined;
 
                   return React.createElement(
@@ -559,11 +569,9 @@ export default function PostAdPage() {
             <div style={{ marginTop: 8, fontSize: 12, color: '#9fb3c9' }}>اضغط على الخريطة لاختيار الإحداثيات بدقة</div>
           </div>
 
-          {/* السعر والوصف */}
           <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="السعر (اختياري)" style={styles.input} />
           <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="الوصف الكامل" style={{ ...styles.input, minHeight: 120 }} />
 
-          {/* صورة الإعلان */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: 6, color: '#9fb3c9', fontSize: 13 }}>صورة الإعلان (اختياري)</label>
@@ -579,7 +587,6 @@ export default function PostAdPage() {
             </div>
           </div>
 
-          {/* حقول الدفع */}
           <div className="two-col">
             {selectedPayment === 'sham' ? (
               <input value={paymentCode} onChange={(e) => setPaymentCode(e.target.value)} placeholder="رمز الدفع (مثال: شام كاش 10000)" style={styles.input} />
@@ -594,7 +601,6 @@ export default function PostAdPage() {
             )}
           </div>
 
-          {/* أزرار الدفع والنسخ */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
             <div className="payment-buttons">
               <button
@@ -641,7 +647,6 @@ export default function PostAdPage() {
             </div>
           </div>
 
-          {/* لوحات شرح الدفع */}
           {selectedPayment === 'sham' && (
             <div className="payment-panel sham-panel payment-panel">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
@@ -696,7 +701,6 @@ export default function PostAdPage() {
             </div>
           )}
 
-          {/* إجراءات الحفظ وإعادة التعيين */}
           <div className="actions-row">
             <div className="actions-left">
               <button onClick={handleSubmit} disabled={loading} style={{ ...styles.btnPrimary, opacity: loading ? 0.7 : 1 }} className="btnPrimaryMobile">
