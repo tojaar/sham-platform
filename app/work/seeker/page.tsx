@@ -1,7 +1,7 @@
 // app/work/seeker/page.tsx
 'use client';
 
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
@@ -139,28 +139,6 @@ export default function SeekerForm() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // اعترض استدعاءات alert لعرضها داخل الصفحة بدل مربع حوار المتصفح
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    // نستخدم unknown لتجنّب استخدام any، ثم نُحوّل النوع عند التعيين إلى window.alert
-    const originalAlert = window.alert;
-    const override = (msg?: unknown) => {
-      try {
-        setNotice(String(msg ?? ''));
-        setTimeout(() => setNotice(null), 3000);
-      } catch {
-        // fallback إلى السلوك الأصلي إن فشل شيء
-        // *تم تعديل السطر هنا لتجنّب استخدام any*
-        originalAlert(String(msg ?? ''));
-      }
-    };
-    // تحويل النوع عند التعيين لتوافق توقيع window.alert
-    window.alert = override as unknown as typeof window.alert;
-    return () => {
-      window.alert = originalAlert;
-    };
-  }, []);
-
   const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
 
   // sample payment links (replace with real links)
@@ -228,8 +206,7 @@ export default function SeekerForm() {
         if (file) {
           imageUrl = await uploadToImgBB(file);
           if (!imageUrl) {
-            setNotice('فشل رفع الصورة. تأكد من مفتاح ImgBB وحجم الصورة ثم أعد المحاولة.');
-            setTimeout(() => setNotice(null), 4000);
+            alert('فشل رفع الصورة. تأكد من مفتاح ImgBB وحجم الصورة ثم أعد المحاولة.');
             setLoading(false);
             return;
           }
@@ -258,12 +235,9 @@ export default function SeekerForm() {
 
         if (error) {
           console.error('Insert error:', error);
-          setNotice('حدث خطأ أثناء إرسال الطلب.');
-          setTimeout(() => setNotice(null), 3000);
+          alert('حدث خطأ أثناء إرسال الطلب.');
         } else {
-          setNotice('تم حفظ الإعلان بنجاح.');
-          setTimeout(() => setNotice(null), 3000);
-
+          alert('تم إرسال طلب الباحث للمراجعة.');
           setForm({
             name: '',
             phone: '',
@@ -285,8 +259,7 @@ export default function SeekerForm() {
         }
       } catch (err) {
         console.error('Unexpected error:', err);
-        setNotice('خطأ غير متوقع. راجع الكونسول.');
-        setTimeout(() => setNotice(null), 3000);
+        alert('خطأ غير متوقع. راجع الكونسول.');
       } finally {
         setLoading(false);
       }
