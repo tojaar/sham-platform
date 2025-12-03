@@ -485,13 +485,7 @@ export default function HireForm() {
             )}
           </label>
 
-          <div className="col-span-1 md:col-span-2">
-            <label className="text-green-300 font-bold mb-2 block">📍 اختر الموقع على الخريطة</label>
-            <div className="rounded overflow-hidden border border-green-600/20" style={{ minHeight: 200 }}>
-              <MapPicker onSelect={(coords: { lat: number; lng: number } | null) => setLocation(coords ?? { lat: 0, lng: 0 })} />
-            </div>
-            <p className="mt-2 text-sm text-gray-400">المختار: lat {location.lat}, lng {location.lng}</p>
-          </div>
+          
 
           <div className="col-span-1 md:col-span-2 flex justify-end mt-4">
             <button
