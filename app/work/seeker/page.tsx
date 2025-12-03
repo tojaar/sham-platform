@@ -150,7 +150,8 @@ export default function SeekerForm() {
         setTimeout(() => setNotice(null), 3000);
       } catch {
         // fallback إلى السلوك الأصلي إن فشل شيء
-        originalAlert(msg as any);
+        // *تم تعديل السطر هنا لتجنّب استخدام any*
+        originalAlert(String(msg ?? ''));
       }
     };
     // تحويل النوع عند التعيين لتوافق توقيع window.alert
