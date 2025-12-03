@@ -1,7 +1,7 @@
 // app/work/seeker/page.tsx
 'use client';
 
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
@@ -140,7 +140,8 @@ export default function SeekerForm() {
   const [notice, setNotice] = useState<string | null>(null);
 
   // اعترض استدعاءات alert لعرضها داخل الصفحة بدل مربع حوار المتصفح
-  React.useEffect(() => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     const originalAlert = window.alert;
     window.alert = (msg?: any) => {
       try {
