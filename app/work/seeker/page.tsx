@@ -142,15 +142,19 @@ export default function SeekerForm() {
   // اعترض استدعاءات alert لعرضها داخل الصفحة بدل مربع حوار المتصفح
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // نستخدم unknown لتجنّب استخدام any، ثم نُحوّل النوع عند التعيين إلى window.alert
     const originalAlert = window.alert;
-    window.alert = (msg?: any) => {
+    const override = (msg?: unknown) => {
       try {
         setNotice(String(msg ?? ''));
         setTimeout(() => setNotice(null), 3000);
       } catch {
-        originalAlert(msg);
+        // fallback إلى السلوك الأصلي إن فشل شيء
+        originalAlert(msg as any);
       }
     };
+    // تحويل النوع عند التعيين لتوافق توقيع window.alert
+    window.alert = override as unknown as typeof window.alert;
     return () => {
       window.alert = originalAlert;
     };
