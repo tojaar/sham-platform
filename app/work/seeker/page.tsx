@@ -139,6 +139,22 @@ export default function SeekerForm() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // اعترض استدعاءات alert لعرضها داخل الصفحة بدل مربع حوار المتصفح
+  React.useEffect(() => {
+    const originalAlert = window.alert;
+    window.alert = (msg?: any) => {
+      try {
+        setNotice(String(msg ?? ''));
+        setTimeout(() => setNotice(null), 3000);
+      } catch {
+        originalAlert(msg);
+      }
+    };
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, []);
+
   const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
 
   // sample payment links (replace with real links)
