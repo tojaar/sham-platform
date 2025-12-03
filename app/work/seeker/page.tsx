@@ -206,7 +206,8 @@ export default function SeekerForm() {
         if (file) {
           imageUrl = await uploadToImgBB(file);
           if (!imageUrl) {
-            alert('فشل رفع الصورة. تأكد من مفتاح ImgBB وحجم الصورة ثم أعد المحاولة.');
+            setNotice('فشل رفع الصورة. تأكد من مفتاح ImgBB وحجم الصورة ثم أعد المحاولة.');
+            setTimeout(() => setNotice(null), 4000);
             setLoading(false);
             return;
           }
@@ -235,10 +236,12 @@ export default function SeekerForm() {
 
         if (error) {
           console.error('Insert error:', error);
-          alert('حدث خطأ أثناء إرسال الطلب.');
+          setNotice('حدث خطأ أثناء إرسال الطلب.');
+          setTimeout(() => setNotice(null), 3000);
         } else {
           setNotice('تم حفظ الإعلان بنجاح.');
           setTimeout(() => setNotice(null), 3000);
+
           setForm({
             name: '',
             phone: '',
@@ -260,7 +263,8 @@ export default function SeekerForm() {
         }
       } catch (err) {
         console.error('Unexpected error:', err);
-        alert('خطأ غير متوقع. راجع الكونسول.');
+        setNotice('خطأ غير متوقع. راجع الكونسول.');
+        setTimeout(() => setNotice(null), 3000);
       } finally {
         setLoading(false);
       }
