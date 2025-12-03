@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import 'leaflet/dist/leaflet.css';
 
-/**
+/*
  * IMPORTANT:
  * لا تستورد supabase على مستوى الوحدة. استورد العميل ديناميكياً داخل الدوال التي تعمل على جهة العميل فقط.
  */
@@ -20,7 +20,7 @@ const MapPicker = dynamic(() => import('@/components/MapPicker').then((m) => m.d
 
 const IMGBB_KEY = process.env.NEXT_PUBLIC_IMGBB_KEY ?? '';
 
-/**
+/*
  * رفع صورة إلى ImgBB مع محاولة multipart ثم fallback إلى base64.
  * تُعيد رابط الصورة أو null عند الفشل.
  */
@@ -44,7 +44,7 @@ async function uploadToImgBB(file: File): Promise<string | null> {
     console.log('ImgBB multipart response:', json);
 
     if (!res.ok || (json && json?.success === false)) {
-      const errMsg = (json && (json?.error?.message ?? json?.status?.error_message)) ?? `HTTP ${res.status};`
+      const errMsg = (json && (json?.error?.message ?? json?.status?.error_message)) ?? `HTTP ${res.status};;`
       throw new Error(String(errMsg));
     }
 
@@ -268,10 +268,7 @@ export default function SeekerForm() {
   );
 
   return (
-    <main
-      ref={containerRef}
-      className="page-root"
-    >
+    <main ref={containerRef} className="page-root">
       <style>{`
         :root{
           --bg-1: #0f172a;
