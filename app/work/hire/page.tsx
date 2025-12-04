@@ -240,9 +240,9 @@ export default function HireForm() {
 
       if (error) {
         console.error('❌ Supabase insert error:', error);
-        alert('❌ فشل إرسال الإعلان: ' + (error.message ?? String(error)));
+        setMessage('❌ فشل إرسال الإعلان: ' + (error.message ?? String(error)));
       } else {
-        alert('📨 تم إرسال إعلان الوظيفة بنجاح');
+        setMessage('📨 تم إرسال إعلان الوظيفة بنجاح');
         setForm({
           job_type: '',
           phone: '',

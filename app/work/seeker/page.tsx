@@ -235,9 +235,10 @@ export default function SeekerForm() {
 
         if (error) {
           console.error('Insert error:', error);
-          alert('حدث خطأ أثناء إرسال الطلب.');
+          setNotice('حدث خطأ اثناء ارسال الطلب.');
+setTimeout(() => setNotice(null), 3000);
         } else {
-          setNotice('تم حفظ الإعلان بنجاح.');
+          setNotice('تم حفظ الإعلان بنجاح ستتم المراجعة من قبل الادارة.');
              setTimeout(() => setNotice(null), 3000);
           setForm({
             name: '',
@@ -260,7 +261,8 @@ export default function SeekerForm() {
         }
       } catch (err) {
         console.error('Unexpected error:', err);
-        alert('خطأ غير متوقع. راجع الكونسول.');
+        setNotice('خطأ غير متوقع تأكد من الشبكة.');
+setTimeout(() => setNotice(null), 3000);
       } finally {
         setLoading(false);
       }
@@ -273,17 +275,17 @@ export default function SeekerForm() {
       <style>{`
         :root{
           --bg-1: #0f172a;
-          --bg-2: #071021;
+          --bg-2: #080707ff;
           --accent: #f59e0b;
           --accent-2: #06b6d4;
-          --card-bg: #ffffff;
-          --muted: #64748b;
+          --card-bg: #fcfcf5ff;
+          --muted: #0ed91fff;
           --success: #06b6d4;
         }
 
         .page-root{
           min-height:100vh;
-          background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 50%, #021018 100%);
+          background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 50%, #080606ff 100%);
           padding: 20px;
           font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
           display:flex;
@@ -323,8 +325,8 @@ export default function SeekerForm() {
           background: var(--card-bg);
           border-radius:16px;
           padding:18px;
-          box-shadow: 0 12px 40px rgba(2,6,23,0.6);
-          border: 2px solid rgba(245,158,11,0.12);
+          box-shadow: 0 12px 40px rgba(43, 213, 37, 0.6);
+          border: 2px solid rgba(87, 23, 42, 0.9);
           display:flex;
           flex-direction:column;
           gap:12px;
@@ -352,9 +354,9 @@ export default function SeekerForm() {
           font-size:14px;
           outline:none;
         }
-        .field-input:focus{ box-shadow: 0 6px 18px rgba(6,182,212,0.06); border-color: var(--accent-2); }
+        .field-input:focus{ box-shadow: 0 6px 18px rgba(212, 51, 6, 0.06); border-color: var(--accent-2); }
 
-        .map-box{ height:220px; border-radius:12px; overflow:hidden; border:1px solid rgba(2,6,23,0.06); }
+        .map-box{ height:220px; border-radius:12px; overflow:hidden; border:1px solid rgba(23, 2, 8, 1); }
 
         .payment-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 
@@ -363,7 +365,7 @@ export default function SeekerForm() {
           border-radius:10px;
           background:transparent;
           color:var(--muted);
-          border:1px solid rgba(2,6,23,0.06);
+          border:1px solid rgba(23, 2, 9, 1);
           font-weight:700;
           cursor:pointer;
           flex:1 1 auto;
@@ -375,7 +377,7 @@ export default function SeekerForm() {
           padding:8px 10px;
           border-radius:8px;
           background:#fff;
-          border:1px solid rgba(2,6,23,0.06);
+          border:1px solid rgba(23, 2, 4, 1);
           cursor:pointer;
           font-size:13px;
           font-weight:700;
@@ -386,8 +388,8 @@ export default function SeekerForm() {
           padding:12px;
           margin-top:6px;
         }
-        .payment-panel.sham{ background:#fff8ed; border:1px solid rgba(245,158,11,0.12); color:#7c2d12; }
-        .payment-panel.usdt{ background:#ecfeff; border:1px solid rgba(6,182,212,0.12); color:#064e3b; }
+        .payment-panel.sham{ background:#fff8ed; border:1px solid rgba(245, 159, 11, 1); color:#7c2d12; }
+        .payment-panel.usdt{ background:#ecfeff; border:1px solid rgba(6, 181, 212, 1); color:#064e3b; }
 
         .actions{ display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
         .primary-btn{
@@ -397,7 +399,7 @@ export default function SeekerForm() {
           color:#000;
           font-weight:700;
           border:none;
-          box-shadow: 0 8px 20px rgba(59,130,246,0.18);
+          box-shadow: 0 8px 20px rgba(59, 131, 246, 1);
           cursor:pointer;
           flex:1 1 auto;
         }
@@ -405,7 +407,7 @@ export default function SeekerForm() {
           padding:10px 14px;
           border-radius:10px;
           background:transparent;
-          border:1px solid rgba(2,6,23,0.06);
+          border:1px solid rgba(23, 2, 7, 1);
           color:#0f172a;
           font-weight:600;
           cursor:pointer;
@@ -416,7 +418,7 @@ export default function SeekerForm() {
         .notice{
           padding:10px;
           border-radius:8px;
-          background: rgba(6,182,212,0.06);
+          background: rgba(196, 17, 41, 0.06);
           color:#0369a1;
           font-size:13px;
         }
@@ -626,7 +628,7 @@ export default function SeekerForm() {
                   padding: 8,
                   fontSize: 16,
                   borderRadius: 8,
-                  border: '1px solid #fde68a',
+                  border: '1px solid #fd8a8aff',
                   backgroundColor: '#fef9f5',
                 }}
               />
