@@ -4,43 +4,33 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 
 /* Dynamic icons (keeps your original pattern) */
 const loadFaUser = () => import('react-icons/fa').then((m) => (props: any) => React.createElement(m.FaUser, props));
 const loadFaStore = () => import('react-icons/fa').then((m) => (props: any) => React.createElement(m.FaStore, props));
 const loadFaTools = () => import('react-icons/fa').then((m) => (props: any) => React.createElement(m.FaTools, props));
 const loadFaBriefcase = () => import('react-icons/fa').then((m) => (props: any) => React.createElement(m.FaBriefcase, props));
-const loadFaInfo = () => import('react-icons/fa').then((m) => (props: any) => React.createElement(m.FaInfoCircle, props));
 
 const FaUser = dynamic(loadFaUser, { ssr: false }) as React.ComponentType<any>;
 const FaStore = dynamic(loadFaStore, { ssr: false }) as React.ComponentType<any>;
 const FaTools = dynamic(loadFaTools, { ssr: false }) as React.ComponentType<any>;
 const FaBriefcase = dynamic(loadFaBriefcase, { ssr: false }) as React.ComponentType<any>;
-const FaInfo = dynamic(loadFaInfo, { ssr: false }) as React.ComponentType<any>;
-
-/**
- * صفحة رئيسية جديدة — تصميم جذاب، حديث، ثلاثي الأبعاد، موجه للهواتف.
- * - لا يوجد مربع عرض إعلانات
- * - لا يوجد حقل بحث
- * - واجهة مركزة على نشر إعلان وإنشاء صفحة
- * - زر معلومات صغير لعرض إشعار المنصة (اختياري، غير مزعج)
- *
- * انسخ هذا الملف واستبدله بملف app/page.tsx في مشروعك.
- */
 
 export default function HomePage() {
-  const [mounted, setMounted] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
   const [toasts, setToasts] = useState<{ id: number; text: string }[]>([]);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (!toasts.length) return;
+    const timers = toasts.map((t) =>
+      setTimeout(() => setToasts((s) => s.filter((x) => x.id !== t.id)), 3200)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [toasts]);
 
   const pushToast = (text: string) => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     setToasts((s) => [...s, { id, text }]);
-    setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), 3500);
   };
 
   return (
@@ -49,11 +39,12 @@ export default function HomePage() {
         :root{
           --bg-1: #071026;
           --bg-2: #071a2a;
-          --accent-a: #06b6d4;
-          --accent-b: #7c3aed;
-          --glass: rgba(255,255,255,0.04);
           --muted: #9aa6b2;
-          --text: #e6eef8;
+          --card-bg: rgba(255,255,255,0.03);
+          --glass-border: rgba(255,255,255,0.06);
+          --text-light: #ffffff;
+          --text-dark: #071026;
+          --radius: 14px;
         }
 
         *{ box-sizing:border-box; }
@@ -61,314 +52,245 @@ export default function HomePage() {
 
         .hp-root{
           min-height:100vh;
+          padding:18px;
           display:flex;
-          align-items:center;
+          align-items:flex-start;
           justify-content:center;
-          padding:20px;
           background:
             radial-gradient(600px 300px at 10% 10%, rgba(124,58,237,0.06), transparent 8%),
             radial-gradient(600px 300px at 90% 90%, rgba(6,182,212,0.05), transparent 10%),
             linear-gradient(180deg, var(--bg-1), var(--bg-2));
-          color:var(--text);
-          perspective:1400px;
+          color:var(--text-light);
         }
 
-        /* Container: mobile-first single column, centered */
-        .container {
+        .wrap {
           width:100%;
-          max-width:760px;
+          max-width:720px;
           display:flex;
           flex-direction:column;
-          gap:18px;
-          align-items:center;
-          padding:18px;
+          gap:14px;
         }
 
-        /* Main 3D hero card */
-        .hero-card {
-          width:100%;
-          border-radius:20px;
-          padding:18px;
-          background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-          border: 1px solid rgba(255,255,255,0.04);
-          box-shadow: 0 30px 80px rgba(2,6,23,0.6);
-          transform-style: preserve-3d;
-          overflow:hidden;
-          position:relative;
-          transition: transform 420ms cubic-bezier(.2,.9,.2,1), box-shadow 420ms;
-        }
-
-        /* layered cards for 3D depth */
-        .card-layer {
-          border-radius:16px;
-          padding:16px;
-          background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
-          border: 1px solid rgba(255,255,255,0.02);
-          box-shadow: 0 12px 40px rgba(2,6,23,0.45);
-          transform-origin: center;
-        }
-
-        .layer-top { transform: translateZ(60px) rotateX(1deg); }
-        .layer-mid { margin-top:-12px; transform: translateZ(30px) rotateX(.6deg); }
-        .layer-base { margin-top:-12px; transform: translateZ(8px) rotateX(.2deg); }
-
-        /* Header row */
-        .header-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .brand { display:flex; gap:12px; align-items:center; min-width:0; }
-        .logo {
-          width:64px; height:64px; border-radius:14px;
-          display:flex; align-items:center; justify-content:center;
-          background: linear-gradient(90deg,#fff2cc,#ffd6a5);
-          color:#071026; font-weight:900; flex-shrink:0;
-          box-shadow: 0 12px 36px rgba(124,58,237,0.08);
-        }
-        .brand-title { font-weight:900; font-size:18px; color:var(--text); margin:0; }
-        .brand-sub { color:var(--muted); font-size:13px; margin-top:6px; }
-
-        /* Big headline */
-        .headline {
-          margin-top:12px;
-          font-size:22px;
-          font-weight:900;
-          line-height:1.02;
-          color:var(--text);
-        }
-        .subline { margin-top:8px; color:var(--muted); font-size:14px; max-width:60ch; }
-
-        /* Primary actions (big circular CTA + small actions) */
-        .actions {
-          margin-top:16px;
-          display:flex;
-          gap:12px;
-          align-items:center;
-          width:100%;
-        }
-
-        .cta-circle {
-          width:84px;
-          height:84px;
-          border-radius:999px;
+        /* Header with small platform badge */
+        .header {
           display:flex;
           align-items:center;
-          justify-content:center;
-          background: linear-gradient(180deg,var(--accent-a),var(--accent-b));
-          color:#001219;
-          font-weight:900;
-          font-size:14px;
-          box-shadow: 0 18px 50px rgba(59,130,246,0.14);
-          cursor:pointer;
-          border:none;
-        }
-
-        .small-actions {
-          display:flex;
-          gap:10px;
-          align-items:center;
-          flex:1;
-          justify-content:space-around;
-        }
-
-        .small-btn {
-          display:flex;
-          gap:8px;
-          align-items:center;
-          padding:10px 12px;
-          border-radius:12px;
-          background: rgba(255,255,255,0.02);
-          border:1px solid rgba(255,255,255,0.03);
-          color:var(--text);
-          font-weight:800;
-          cursor:pointer;
-          min-width:0;
-          justify-content:center;
-        }
-
-        /* Action tiles (compact, circular icons) */
-        .tiles {
-          margin-top:14px;
-          display:flex;
-          gap:12px;
-          width:100%;
           justify-content:space-between;
+          gap:12px;
         }
 
-        .tile {
-          flex:1;
+        .brand {
+          display:flex;
+          gap:12px;
+          align-items:center;
+          min-width:0;
+        }
+
+        .badge {
+          width:48px;
+          height:48px;
+          border-radius:12px;
+          overflow:hidden;
+          flex-shrink:0;
+          display:inline-block;
+          box-shadow: 0 12px 36px rgba(2,6,23,0.12);
+          background: linear-gradient(90deg,#fff,#fff);
+        }
+
+        .brand-title {
+          font-weight:900;
+          font-size:18px;
+          margin:0;
+          color:var(--text-light);
+        }
+        .brand-sub {
+          color:var(--muted);
+          font-size:13px;
+          margin-top:6px;
+        }
+
+        /* Main card */
+        .card {
+          border-radius:18px;
+          padding:16px;
+          background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+          border: 1px solid var(--glass-border);
+          box-shadow: 0 30px 90px rgba(2,6,23,0.6);
+        }
+
+        .intro {
           display:flex;
           flex-direction:column;
-          align-items:center;
           gap:8px;
-          padding:12px;
-          border-radius:14px;
-          background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
-          border:1px solid rgba(255,255,255,0.02);
+        }
+
+        .title {
+          font-size:20px;
+          font-weight:900;
+          margin:0;
+          color:var(--text-light);
+        }
+        .subtitle {
+          color:var(--muted);
+          font-size:14px;
+          margin:0;
+        }
+
+        /* Buttons area — vertical stack for mobile */
+        .buttons {
+          margin-top:16px;
+          display:grid;
+          grid-template-columns: 1fr;
+          gap:12px;
+        }
+
+        /* Elegant button style */
+        .nav-btn {
+          display:flex;
+          gap:14px;
+          align-items:center;
+          padding:16px;
+          border-radius: var(--radius);
+          color: var(--text-light);
+          font-weight:800;
+          text-decoration:none;
+          border:none;
           cursor:pointer;
-          transition: transform 260ms cubic-bezier(.2,.9,.2,1);
+          transition: transform 180ms cubic-bezier(.2,.9,.2,1), box-shadow 180ms ease;
+          min-height:72px;
+          box-shadow: 0 12px 36px rgba(2,6,23,0.18);
         }
-        .tile:hover { transform: translateY(-8px); box-shadow: 0 18px 40px rgba(2,6,23,0.35); }
+        .nav-btn:active { transform: translateY(1px) scale(.998); }
+        .nav-btn:hover { transform: translateY(-6px); box-shadow: 0 28px 80px rgba(2,6,23,0.28); }
 
-        .tile .icon {
-          width:56px; height:56px; border-radius:12px; display:flex; align-items:center; justify-content:center;
-          background: linear-gradient(90deg,#fff,#fff); color:#071026; font-weight:900;
-          box-shadow: 0 8px 20px rgba(2,6,23,0.08);
+        .nav-icon {
+          width:64px;
+          height:64px;
+          border-radius:12px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:22px;
+          flex-shrink:0;
+          background: rgba(255,255,255,0.12);
+          box-shadow: inset 0 -6px 18px rgba(0,0,0,0.06);
         }
-        .tile .label { font-weight:800; color:var(--text); font-size:13px; text-align:center; }
 
-        /* Tiny info button (shows platform notice modal) */
-        .info-btn {
-          width:40px; height:40px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center;
-          background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.03); cursor:pointer;
+        .nav-text {
+          display:flex;
+          flex-direction:column;
+          align-items:flex-start;
+          gap:6px;
+        }
+        .nav-title { font-size:18px; color:var(--text-light); letter-spacing: -0.01em; }
+        .nav-sub { font-size:13px; color: rgba(255,255,255,0.85); font-weight:700; }
+
+        /* Color variants with stronger contrast and white text */
+        .visitor {
+          background: linear-gradient(90deg,#2563eb,#60a5fa); /* blue */
+        }
+        .merchant {
+          background: linear-gradient(90deg,#059669,#34d399); /* green */
+        }
+        .member {
+          background: linear-gradient(90deg,#d97706,#f59e0b); /* amber */
+        }
+        .work {
+          background: linear-gradient(90deg,#dc2626,#fb7185); /* red/pink */
         }
 
-        /* Modal / sheet for platform notice (centered small modal) */
-        .modal-backdrop {
-          position:fixed; inset:0; background: rgba(2,6,23,0.5); display:flex; align-items:center; justify-content:center; z-index:80;
+        /* Icon color: white for contrast */
+        .nav-icon > svg { width:28px; height:28px; color: #fff; }
+
+        /* Footer small note */
+        .footer {
+          margin-top:12px;
+          display:flex;
+          justify-content:center;
+          color:var(--muted);
+          font-weight:700;
+          font-size:13px;
         }
-        .modal {
-          width:calc(100% - 40px); max-width:520px; border-radius:14px; padding:16px;
-          background: linear-gradient(180deg,#ffffff,#fbfbfb); color:#071026; box-shadow: 0 30px 80px rgba(2,6,23,0.6);
-          border:1px solid rgba(2,6,23,0.06);
-        }
-        .modal h3 { margin:0; font-size:16px; font-weight:900; }
-        .modal p { margin-top:8px; color:#6b7280; font-size:14px; }
 
         /* Toasts */
         .toasts {
           position:fixed; left:50%; transform:translateX(-50%); bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:90; width:calc(100% - 40px); max-width:720px; pointer-events:none;
         }
         .toast {
-          pointer-events:auto; background: rgba(2,6,23,0.9); color:#fff; padding:10px 14px; border-radius:10px; box-shadow: 0 10px 30px rgba(2,6,23,0.6); font-weight:700; text-align:center;
+          pointer-events:auto; background: rgba(2,6,23,0.9); color:#fff; padding:10px 14px; border-radius:10px; box-shadow: 0 10px 30px rgba(2,6,23,0.6); font-weight:800; text-align:center;
         }
 
         /* Responsive tweaks */
-        @media (max-width: 720px) {
-          .container { padding:12px; }
-          .logo { width:56px; height:56px; }
-          .headline { font-size:20px; }
-          .cta-circle { width:72px; height:72px; }
-          .tile .icon { width:48px; height:48px; }
+        @media (max-width: 520px) {
+          .badge { width:44px; height:44px; }
+          .nav-icon { width:56px; height:56px; }
+          .nav-btn { min-height:68px; padding:14px; border-radius:12px; }
+          .nav-title { font-size:16px; }
+          .nav-sub { font-size:12px; }
         }
       `}</style>
 
-      <div className="container" role="main">
-        <div className="hero-card" aria-labelledby="hp-headline">
-          {/* layered 3D effect */}
-          <div className="card-layer layer-top" aria-hidden>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div className="brand">
-                <div className="logo" aria-hidden>SP</div>
-                <div style={{ minWidth: 0 }}>
-                  <div className="brand-title">منصة تجار للإعلانات</div>
-                  <div className="brand-sub">واجهة سريعة ومصممة للهواتف</div>
-                </div>
-              </div>
+      <div className="wrap">
+        <div className="header" role="banner">
+          <div className="brand">
+            <div className="badge" aria-hidden>
+              {/* small platform image from public/assets/tojar.png */}
+              <Image src="/assets/tojar.png" alt="شعار المنصة" width={48} height={48} style={{ objectFit: 'cover' }} />
+            </div>
 
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  className="info-btn"
-                  aria-label="معلومات المنصة"
-                  onClick={() => setShowInfo(true)}
-                  title="معلومات المنصة"
-                >
-                  <FaInfo style={{ width: 18, height: 18, color: '#e6eef8' }} />
-                </button>
-              </div>
+            <div>
+              <div className="brand-title">منصة تجار للإعلانات</div>
+              <div className="brand-sub">واجهة مُبسطة ومناسبة للهواتف</div>
             </div>
           </div>
 
-          <div className="card-layer layer-mid" aria-hidden>
-            <h2 id="hp-headline" className="headline">أنشئ إعلانك الآن — سريع، واضح، وفعّال</h2>
-            <div className="subline">نظام مُبسّط يركّز على النتيجة: إنشاء صفحة إعلان، إدارة العروض، والتواصل مع المهتمين بسهولة من هاتفك.</div>
-
-            <div className="actions">
-              <button
-                className="cta-circle"
-                aria-label="إنشاء إعلان سريع"
-                onClick={() => {
-                  pushToast('بدء إنشاء إعلان جديد');
-                  // navigate to create page
-                  window.location.href = '/create-page';
-                }}
-              >
-                أنشر
-              </button>
-
-              <div className="small-actions" role="group" aria-label="إجراءات سريعة">
-                <Link href="/create-page" className="small-btn" aria-label="إنشاء صفحة">
-                  إنشاء صفحة
-                </Link>
-
-                <button
-                  className="small-btn"
-                  onClick={() => {
-                    pushToast('تم نسخ رابط المنصة');
-                    navigator.clipboard?.writeText(window.location.origin).catch(() => {});
-                  }}
-                >
-                  مشاركة
-                </button>
-
-                <Link href="/work" className="small-btn" aria-label="العمل">
-                  العمل
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          <div className="card-layer layer-base" aria-hidden>
-            <div className="tiles" role="list" aria-label="روابط سريعة">
-              <Link href="/search" className="tile" role="listitem" aria-label="زائر">
-                <div className="icon"><FaUser /></div>
-                <div className="label">زائر</div>
-              </Link>
-
-              <Link href="/merchant" className="tile" role="listitem" aria-label="انشر اعلاناتك">
-                <div className="icon"><FaStore /></div>
-                <div className="label">انشر اعلاناتك</div>
-              </Link>
-
-              <Link href="/auth/login" className="tile" role="listitem" aria-label="عضو منتج">
-                <div className="icon"><FaTools /></div>
-                <div className="label">عضو منتِج</div>
-              </Link>
-
-              <Link href="/work" className="tile" role="listitem" aria-label="العمل">
-                <div className="icon"><FaBriefcase /></div>
-                <div className="label">العمل</div>
-              </Link>
-            </div>
-          </div>
+          {/* removed bell as requested — nothing on the right */}
+          <div style={{ width: 44 }} aria-hidden />
         </div>
+
+        <section className="card" aria-labelledby="main-title">
+          <div className="intro">
+            <h1 id="main-title" className="title">ابدأ الآن</h1>
+            <p className="subtitle">أزرار واضحة، نص مقروء، ومساحات لمس واسعة لتجربة مريحة على الهاتف.</p>
+          </div>
+
+          <div className="buttons" role="list" aria-label="روابط سريعة">
+            <Link href="/search" className="nav-btn visitor" role="listitem" aria-label="زائر">
+              <div className="nav-icon" aria-hidden><FaUser /></div>
+              <div className="nav-text">
+                <div className="nav-title">زائر</div>
+                <div className="nav-sub">استعرض الإعلانات بدون تسجيل</div>
+              </div>
+            </Link>
+
+            <Link href="/merchant" className="nav-btn merchant" role="listitem" aria-label="انشر اعلاناتك">
+              <div className="nav-icon" aria-hidden><FaStore /></div>
+              <div className="nav-text">
+                <div className="nav-title">انشر إعلاناتك</div>
+                <div className="nav-sub">لوحة نشر مبسطة للتجار</div>
+              </div>
+            </Link>
+
+            <Link href="/auth/login" className="nav-btn member" role="listitem" aria-label="عضو منتج">
+              <div className="nav-icon" aria-hidden><FaTools /></div>
+              <div className="nav-text">
+                <div className="nav-title">عضو منتِج</div>
+                <div className="nav-sub">لوحة الأعضاء والمزايا</div>
+              </div>
+            </Link>
+
+            <Link href="/work" className="nav-btn work" role="listitem" aria-label="العمل">
+              <div className="nav-icon" aria-hidden><FaBriefcase /></div>
+              <div className="nav-text">
+                <div className="nav-title">العمل</div>
+                <div className="nav-sub">فرص ومهام متاحة</div>
+              </div>
+            </Link>
+          </div>
+
+          <div className="footer">نسخة تجريبية · دعم الهاتف</div>
+        </section>
       </div>
-
-      {/* Info modal (platform notice) */}
-      {showInfo && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setShowInfo(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>إشعار المنصة</h3>
-            <p>مرحبًا — هذه مساحة لإشعارات المنصة المهمة. يمكنك عرض التنبيهات هنا أو إضافتها عبر لوحة الإدارة.</p>
-
-            <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => {
-                  pushToast('تم حفظ الإشعار محليًا');
-                  setShowInfo(false);
-                }}
-                style={{ padding: '8px 12px', borderRadius: 10, background: 'linear-gradient(90deg,#06b6d4,#7c3aed)', border: 'none', color: '#001219', fontWeight: 800, cursor: 'pointer' }}
-              >
-                تم
-              </button>
-
-              <button
-                onClick={() => setShowInfo(false)}
-                style={{ padding: '8px 12px', borderRadius: 10, background: 'transparent', border: '1px solid rgba(2,6,23,0.06)', color: '#071026', fontWeight: 800, cursor: 'pointer' }}
-              >
-                إغلاق
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Toasts */}
       <div className="toasts" aria-live="polite" aria-atomic="true">
