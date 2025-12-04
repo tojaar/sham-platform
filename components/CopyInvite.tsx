@@ -7,7 +7,7 @@ export default function CopyInvite({ code }: { code?: string | null }) {
     if (!code) return alert('لا يوجد رمز دعوة');
     try {
       await navigator.clipboard.writeText(code);
-      alert('تم نسخ رمز الدعوة');
+      
     } catch {
       alert('تعذر النسخ، انسخ يدويًا: ' + code);
     }
