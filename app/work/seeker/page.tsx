@@ -237,7 +237,8 @@ export default function SeekerForm() {
           console.error('Insert error:', error);
           alert('حدث خطأ أثناء إرسال الطلب.');
         } else {
-          alert('تم إرسال طلب الباحث للمراجعة.');
+          setNotice('تم حفظ الإعلان بنجاح.');
+             setTimeout(() => setNotice(null), 3000);
           setForm({
             name: '',
             phone: '',
