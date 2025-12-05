@@ -1,3 +1,4 @@
+// app/page.tsx
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -17,6 +18,37 @@ const MapContainer = dynamic(() => import('react-leaflet').then((m) => m.MapCont
 const TileLayer = dynamic(() => import('react-leaflet').then((m) => m.TileLayer), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then((m) => m.Popup), { ssr: false });
 const CircleMarker = dynamic(() => import('react-leaflet').then((m) => m.CircleMarker), { ssr: false });
+
+/* ---------- Icons (dynamic, typed) ---------- */
+const loadFaUser = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaUser as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
+const loadFaStore = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaStore as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
+const loadFaTools = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaTools as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
+const loadFaBriefcase = () =>
+  import('react-icons/fa').then((mod) => {
+    const Icon = (props: React.SVGProps<SVGSVGElement>) =>
+      React.createElement(mod.FaBriefcase as unknown as React.ComponentType<React.SVGProps<SVGSVGElement>>, props);
+    return Icon;
+  });
+
+const FaUser = dynamic(loadFaUser, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const FaStore = dynamic(loadFaStore, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const FaTools = dynamic(loadFaTools, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
+const FaBriefcase = dynamic(loadFaBriefcase, { ssr: false }) as React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
 /* ---------- Types ---------- */
 type Hire = {
@@ -52,6 +84,48 @@ const formatCount = (n?: number | null) => {
   if (v >= 1_000_000) return (v / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
   if (v >= 1_000) return (v / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
   return String(v);
+};
+
+const safeImage = (v?: unknown): string | null => {
+  if (!v || typeof v !== 'string') return null;
+  try {
+    // basic validation: must be a URL or data URI
+    if (v.startsWith('http') || v.startsWith('data:') || v.startsWith('/')) return v;
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+type LatLng = { lat: number; lng: number } | null;
+const parseLocation = (loc?: unknown): LatLng => {
+  if (!loc) return null;
+  if (typeof loc === 'string') {
+    const s = loc.trim();
+    // formats: "lat,lng" or "lat lng"
+    const comma = s.split(',');
+    if (comma.length === 2) {
+      const lat = Number(comma[0]);
+      const lng = Number(comma[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    const parts = s.split(/\s+/);
+    if (parts.length === 2) {
+      const lat = Number(parts[0]);
+      const lng = Number(parts[1]);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    return null;
+  }
+  if (typeof loc === 'object') {
+    const o = loc as Record<string, unknown>;
+    const lat = (o.lat ?? o.latitude ?? o.latitud) as unknown;
+    const lng = (o.lng ?? o.longitude ?? o.long) as unknown;
+    const nlat = typeof lat === 'string' ? Number(lat) : typeof lat === 'number' ? lat : NaN;
+    const nlng = typeof lng === 'string' ? Number(lng) : typeof lng === 'number' ? lng : NaN;
+    if (Number.isFinite(nlat) && Number.isFinite(nlng)) return { lat: nlat, lng: nlng };
+  }
+  return null;
 };
 
 /* ---------- Component ---------- */
@@ -203,15 +277,17 @@ export default function SearchHirePage() {
         .select('*')
         .order('created_at', { ascending: false })
         .range(0, 99999);
-
-      if (error) throw error;
-      const arr = Array.isArray(data) ? data : [];
-      const normalized = arr.map((d) => normalize(d));
-      setHires(normalized);
-    } catch (err: unknown) {
-      console.error('fetchHires error', err);
-      const msg = err instanceof Error ? err.message : String(err ?? 'خطأ غير متوقع');
-      setMessage('تعذر جلب البيانات: ' + msg);
+      if (error) {
+        setMessage('حدث خطأ أثناء جلب البيانات');
+        setHires([]);
+      } else if (!data) {
+        setHires([]);
+      } else {
+        const normalized = (data as unknown[]).map((d) => normalize(d));
+        setHires(normalized);
+      }
+    } catch (err) {
+      setMessage('فشل الاتصال بالخادم');
       setHires([]);
     } finally {
       setLoading(false);
@@ -219,103 +295,10 @@ export default function SearchHirePage() {
   }, [normalize]);
 
   useEffect(() => {
+    // initial load
     fetchHires();
-  }, [fetchHires]);
-
-  /* ---------- derived lists ---------- */
-  const countries = useMemo(() => {
-    const s = new Set<string>();
-    hires.forEach((x) => {
-      if (typeof x.country === 'string' && x.country) s.add(x.country);
-    });
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
-  }, [hires]);
-
-  const provinces = useMemo(() => {
-    const s = new Set<string>();
-    hires
-      .filter((x) => (country ? x.country === country : true))
-      .forEach((x) => {
-        if (typeof x.province === 'string' && x.province) s.add(x.province);
-      });
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
-  }, [hires, country]);
-
-  const cities = useMemo(() => {
-    const s = new Set<string>();
-    hires
-      .filter((x) => (country ? x.country === country : true))
-      .filter((x) => (province ? x.province === province : true))
-      .forEach((x) => {
-        if (typeof x.city === 'string' && x.city) s.add(x.city);
-      });
-    return Array.from(s).sort((a, b) => a.localeCompare(b));
-  }, [hires, country, province]);
-
-  /* ---------- helpers ---------- */
-  const parseLocation = useCallback((loc?: string | null) => {
-    if (!loc) return null;
-    try {
-      const s = String(loc).trim();
-      if ((s.startsWith('{') || s.startsWith('[')) && (s.includes('lat') || s.includes('lng'))) {
-        try {
-          const parsed = JSON.parse(s.replace(/(\w+)\s*:/g, '"$1":'));
-          const lat = parsed.lat ?? parsed.latitude ?? null;
-          const lng = parsed.lng ?? parsed.longitude ?? null;
-          if (lat != null && lng != null) return { lat: Number(lat), lng: Number(lng) };
-        } catch {}
-      }
-      const parts = s.includes(',') ? s.split(',') : s.split(/\s+/);
-      if (parts.length < 2) return null;
-      const lat = Number(parts[0]);
-      const lng = Number(parts[1]);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-      return { lat, lng };
-    } catch {
-      return null;
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const safeImage = useCallback((u?: string | null) => {
-    if (!u) return null;
-    const s = String(u).trim();
-    if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:')) return s;
-    return null;
-  }, []);
-
-  /* ---------- like handler (optimistic + persist) ---------- */
-  const persistLikeToDb = useCallback(async (id: string, newCount: number) => {
-    try {
-      const supabase = await getSupabase();
-      await supabase.from('hire_requests').update({ likes: newCount }).eq('id', id);
-    } catch (err) {
-      console.error('persistLikeToDb error', err);
-      setMessage('تعذر حفظ الإعجاب في الخادم');
-      setTimeout(() => setMessage(null), 2500);
-    }
-  }, []);
-
-  const incrementLike = useCallback((id: string) => {
-    if (likedLocal[String(id)]) return;
-
-    setHires((prev) =>
-      prev.map((h) => {
-        if (String(h.id) === String(id)) {
-          const newLikes = Number(h.likes ?? 0) + 1;
-          persistLikeToDb(String(id), newLikes);
-          return { ...h, likes: newLikes };
-        }
-        return h;
-      })
-    );
-
-    setLikedLocal((s) => ({ ...s, [String(id)]: true }));
-
-    setLikeAnimating((s) => ({ ...s, [String(id)]: true }));
-    setTimeout(() => {
-      setLikeAnimating((s) => ({ ...s, [String(id)]: false }));
-    }, 700);
-  }, [likedLocal, persistLikeToDb]);
 
   /* ---------- filtering ---------- */
   const filtered = useMemo(() => {
@@ -332,11 +315,57 @@ export default function SearchHirePage() {
     });
   }, [hires, q, country, province, city]);
 
+  /* ---------- derive lists for filters ---------- */
+  const countries = useMemo(() => {
+    const s = new Set<string>();
+    hires.forEach((h) => {
+      if (h.country) s.add(h.country);
+    });
+    return Array.from(s).sort();
+  }, [hires]);
+
+  const provinces = useMemo(() => {
+    const s = new Set<string>();
+    hires.forEach((h) => {
+      if (h.province) s.add(h.province);
+    });
+    return Array.from(s).sort();
+  }, [hires]);
+
+  const cities = useMemo(() => {
+    const s = new Set<string>();
+    hires.forEach((h) => {
+      if (h.city) s.add(h.city);
+    });
+    return Array.from(s).sort();
+  }, [hires]);
+
   /* ---------- keep mapKey in sync with selected ---------- */
   useEffect(() => {
     if (!selected) return;
     setMapKey((k) => k + 1);
   }, [selected]);
+
+  /* ---------- like increment (local + server) ---------- */
+  const incrementLike = useCallback(
+    async (id: string) => {
+      if (likedLocal[id]) return;
+      setLikedLocal((s) => ({ ...s, [id]: true }));
+      setLikeAnimating((s) => ({ ...s, [id]: true }));
+      setTimeout(() => setLikeAnimating((s) => ({ ...s, [id]: false })), 700);
+
+      // optimistic UI update
+      setHires((prev) => prev.map((p) => (String(p.id) === id ? { ...p, likes: (Number(p.likes ?? 0) + 1) } : p)));
+
+      try {
+        const supabase = await getSupabase();
+        await supabase.from('hire_requests').update({ likes: (hires.find((x) => String(x.id) === id)?.likes ?? 0) + 1 }).eq('id', id);
+      } catch {
+        // ignore server error; we keep optimistic update
+      }
+    },
+    [hires, likedLocal]
+  );
 
   /* ---------- Render ---------- */
   return (
@@ -523,15 +552,20 @@ export default function SearchHirePage() {
             <div className="md:col-span-2" />
           </section>
 
-          {/* Details modal - smaller luxurious framed design */}
+          {/* Details modal - smaller luxurious framed design (REPLACED: table + scroll) */}
           {selected && (
             <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" style={{ perspective: 1000 }}>
               <div className="absolute inset-0 bg-black/60" onClick={() => setSelected(null)} />
 
-              <div className="relative w-full max-w-[95vw] sm:max-w-2xl bg-gradient-to-br from-[#07121a] to-[#071827] border border-white/8 rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(2,6,23,0.8)] z-10 transform-gpu">
+              {/* Modal frame */}
+              <div
+                className="relative w-full max-w-[95vw] sm:max-w-2xl bg-gradient-to-br from-[#07121a] to-[#071827] border border-white/8 rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(2,6,23,0.8)] z-10 transform-gpu"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
                 <div className="absolute -inset-0.5 rounded-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(239,68,68,0.06), rgba(6,182,212,0.03))', filter: 'blur(6px)' }} />
 
-                <div className="relative p-3 sm:p-4">
+                <div className="relative p-3 sm:p-4 flex flex-col" style={{ gap: 12 }}>
+                  {/* Header */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="text-lg sm:text-xl font-bold leading-tight truncate">{selected.title ?? selected.profession ?? '—'}</h2>
@@ -542,46 +576,135 @@ export default function SearchHirePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                    <div className="space-y-3">
-                      {safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) ? (
-                        <div className="w-full h-48 sm:h-56 rounded-xl border border-white/6 bg-[#07171b] flex items-center justify-center overflow-auto" style={{ touchAction: 'pinch-zoom' }}>
-                          <Image src={String(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null))} alt="صورة المنشور" width={1200} height={675} className="object-contain max-w-none w-auto h-full" unoptimized />
-                        </div>
-                      ) : (
-                        <div className="w-full h-48 sm:h-56 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
-                      )}
+                  {/* Content area: constrained height + scrollable */}
+                  <div
+                    className="w-full overflow-y-auto rounded-xl"
+                    style={{
+                      maxHeight: 'calc(100vh - 200px)',
+                      paddingRight: 6,
+                      WebkitOverflowScrolling: 'touch',
+                    }}
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                      {/* Left: image (إن وُجد) + وصف مختصر */}
+                      <div className="space-y-3">
+                        {safeImage(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null)) ? (
+                          <div className="w-full h-48 sm:h-56 rounded-xl border border-white/6 bg-[#07171b] flex items-center justify-center overflow-hidden" style={{ touchAction: 'pinch-zoom' }}>
+                            <Image
+                              src={String(selected.image_url ?? (typeof selected.image === 'string' ? selected.image : null) ?? (typeof selected.photo === 'string' ? selected.photo : null))}
+                              alt="صورة المنشور"
+                              width={1200}
+                              height={675}
+                              className="object-contain max-w-none w-auto h-full"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-48 sm:h-56 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
+                        )}
 
-                      <div className="text-[14px] sm:text-sm text-white/70 space-y-2">
-                        <p><strong>المهنة: </strong>{selected.profession ?? selected.title ?? '—'}</p>
-                        <p><strong>الوصف: </strong>{selected.description ?? '—'}</p>
-                        <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
-                          <div><strong>الهاتف:</strong> {selected.phone ?? '—'}</div>
-                          <div><strong>الراتب:</strong> {selected.salary ?? '—'}</div>
-                          <div><strong>ساعات العمل:</strong> {selected.hours ?? '—'}</div>
-                          <div><strong>مكان العمل:</strong> {selected.job_location ?? '—'}</div>
-                          <div><strong>الدولة:</strong> {selected.country ?? '—'}</div>
-                          <div><strong>المدينة:</strong> {selected.city ?? '—'}</div>
+                        <div className="text-[14px] sm:text-sm text-white/70 space-y-2">
+                          <p className="line-clamp-4">{selected.description ?? '—'}</p>
+                        </div>
+                      </div>
+
+                      {/* Right: جدول التفاصيل */}
+                      <div>
+                        <div className="bg-transparent rounded-xl border border-white/6 p-2 sm:p-3">
+                          <table className="w-full text-sm sm:text-base" style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+                            <tbody>
+                              <tr>
+                                <td className="w-1/3 text-white/70 align-top py-2 px-2 font-semibold">المهنة</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.profession ?? selected.title ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الاسم</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.name ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الهاتف</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.phone ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الراتب</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.salary ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">ساعات العمل</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.hours ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">مكان العمل</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.job_location ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">العنوان</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.address ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الدولة</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.country ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">المدينة</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.city ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الإحداثيات</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.location ?? '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">تاريخ الإنشاء</td>
+                                <td className="text-white/90 align-top py-2 px-2">{selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</td>
+                              </tr>
+
+                              <tr>
+                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الإعجابات</td>
+                                <td className="text-white/90 align-top py-2 px-2">{formatCount(selected.likes)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     </div>
 
-                    <div className="h-56 lg:h-full bg-black rounded-xl overflow-hidden border border-white/6">
-                      {parseLocation(selected.location) ? (
-                        <MapContainer key={mapKey} center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} zoom={13} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
-                          <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                          <CircleMarker center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 }}>
-                            <Popup>{selected.profession ?? selected.title ?? 'موقع'} <br /> {selected.location}</Popup>
-                          </CircleMarker>
-                        </MapContainer>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-white/60 px-4">لا توجد إحداثيات صالحة لعرض الخريطة</div>
-                      )}
+                    {/* Map row (يبقى كما هو) */}
+                    <div className="mt-3">
+                      <div className="h-56 lg:h-64 bg-black rounded-xl overflow-hidden border border-white/6">
+                        {parseLocation(selected.location) ? (
+                          <MapContainer key={mapKey} center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} zoom={13} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
+                            <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                            <CircleMarker center={[parseLocation(selected.location)!.lat, parseLocation(selected.location)!.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 }}>
+                              <Popup>{selected.profession ?? selected.title ?? 'موقع'} <br /> {selected.location}</Popup>
+                            </CircleMarker>
+                          </MapContainer>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-white/60 px-4">لا توجد إحداثيات صالحة لعرض الخريطة</div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
+                  {/* Footer actions: فتح في الخرائط + إغلاق */}
                   <div className="mt-4 flex items-center justify-end gap-2">
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? ''))}`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-sm">افتح في الخرائط</a>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? ''))}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-sm"
+                    >
+                      افتح في الخرائط
+                    </a>
                     <button onClick={() => setSelected(null)} className="px-3 py-2 rounded-md bg-white/6 text-sm">إغلاق</button>
                   </div>
                 </div>
