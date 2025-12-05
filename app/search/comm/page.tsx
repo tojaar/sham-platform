@@ -453,6 +453,7 @@ export default function SearchCommForm() {
               <div className="space-y-4">
                 {filtered.map((c) => {
                   const image = (c.image_url ?? c.company_logo) as string | null;
+                  const anim = Boolean(likeAnimating[String(c.id)]);
                   return (
                     <article
                       key={c.id}
@@ -507,10 +508,10 @@ export default function SearchCommForm() {
                             عرض
                           </button>
 
-                          <div className={`like-burst ${likeAnimating[String(c.id)] ? 'animate' : ''}`}>
+                          <div className={`like-burst ${anim ? 'animate' : ''}`}>
                             <button
                               onClick={(e) => { e.stopPropagation(); incrementLike(String(c.id)); }}
-                              className={`flex items-center gap-2 px-2 py-1 rounded-md ${likeAnimating[String(c.id)] ? 'like-animate' : ''} bg-white/6 hover:bg-white/10 text-xs sm:text-sm`}
+                              className={`flex items-center gap-2 px-2 py-1 rounded-md ${anim ? 'like-animate' : ''} bg-white/6 hover:bg-white/10 text-xs sm:text-sm`}
                               aria-label="اعجبني"
                             >
                               <svg className="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -537,120 +538,207 @@ export default function SearchCommForm() {
           </section>
         </div>
 
-        {/* Details modal - smaller for mobile, with aesthetics */}
+        {/* Details modal - table + vertical scroll (fixed map logic) */}
         {selected && (
-          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-3">
+          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" style={{ perspective: 1000 }}>
             <div className="absolute inset-0 bg-black/70" onClick={closeDetails} />
-            <div className="relative w-full max-w-[92vw] sm:max-w-xl bg-[#061017] border border-white/6 rounded-2xl overflow-hidden shadow-[0_30px_80px_rgba(2,6,23,0.85)] z-10 transform-gpu">
+
+            <div
+              className="relative w-full max-w-[95vw] sm:max-w-2xl bg-gradient-to-br from-[#07121a] to-[#071827] border border-white/8 rounded-2xl overflow-hidden shadow-[0_30px_80px_rgba(2,6,23,0.85)] z-10 transform-gpu"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               <div className="absolute -inset-0.5 rounded-2xl pointer-events-none" style={{ background: 'linear-gradient(90deg, rgba(239,68,68,0.06), rgba(6,182,212,0.03))', filter: 'blur(6px)' }} />
 
-              <div className="flex items-start justify-between p-3 border-b border-white/6">
-                <div className="flex items-center gap-3">
-                  {selected.image_url ? (
-                    <div className="w-10 h-10 rounded-md overflow-hidden bg-[#07121a] flex items-center justify-center border border-white/6">
-                      <img src={String(selected.image_url)} alt="شعار" className="w-full h-full object-contain" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-md flex items-center justify-center bg-gradient-to-br from-red-500 to-red-700 text-black font-semibold">Co</div>
-                  )}
-
-                  <div>
-                    <h2 className="text-base font-bold leading-tight">{selected.title ?? selected.category ?? '—'}</h2>
-                    <p className="text-xs text-white/70">{selected.company ?? selected.contact ?? '—'}</p>
-                    <div className="text-[11px] text-white/60">{fmtDate(selected.created_at)}</div>
+              <div className="relative p-3 sm:p-4 flex flex-col" style={{ gap: 12 }}>
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold leading-tight truncate">{selected.title ?? selected.company ?? selected.category ?? '—'}</h2>
+                    <p className="text-xs sm:text-sm text-white/70 truncate">{selected.company ?? selected.contact ?? '—'}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={closeDetails} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded bg-white/3">✕</button>
                   </div>
                 </div>
 
-                <button onClick={closeDetails} aria-label="اغلاق" className="text-white/60 hover:text-white p-2 rounded bg-white/3">✕</button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 p-3">
-                <div className="space-y-2">
-                  {selected.company_logo ? (
-                    <div className="w-full h-40 sm:h-44 rounded-xl border border-white/6 bg-[#07171b] overflow-hidden flex items-center justify-center">
-                      <img src={String(selected.company_logo)} alt="صورة الإعلان" className="max-w-full max-h-full object-contain" />
-                    </div>
-                  ) : (
-                    <div className="w-full h-40 sm:h-44 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
-                  )}
-
-                  <div className="text-sm text-white/70 space-y-1">
-                    <p className="text-sm"><strong>العنوان / الفئة: </strong>{selected.title ?? selected.category ?? '—'}</p>
-                    <p className="text-sm"><strong>الوصف: </strong>{selected.description ?? '—'}</p>
-
-                    <div className="grid grid-cols-2 gap-2 mt-1 text-sm">
-                      <div><strong>الشركة:</strong> <div className="text-white/70 inline">{getString(selected, 'name') ?? '—'}</div></div>
-                      <div><strong>هاتف:</strong> <div className="text-white/70 inline">{selected.phone ?? '—'}</div></div>
-                      <div><strong>السعر:</strong> <div className="text-white/70 inline">{selected.price ?? '—'}</div></div>
-                      <div><strong>العنوان:</strong> <div className="text-white/70 inline">{selected.address ?? '—'}</div></div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-44 lg:h-full bg-black rounded-xl overflow-hidden border border-white/6">
-                  {(() => {
-                    const loc =
-                      parseLocation(selected.location ?? undefined) ??
-                      (selected.location_lat != null && selected.location_lng != null ? { lat: selected.location_lat, lng: selected.location_lng } : null);
-
-                    if (loc) {
-                      if (!LeafletLoaded || !LeafletRef.current) {
-                        return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
-                      }
-                      const comps = LeafletRef.current as LeafletComponents;
-                      const MapContainerComp = comps.MapContainer;
-                      const TileLayerComp = comps.TileLayer;
-                      const CircleMarkerComp = comps.CircleMarker;
-                      const PopupComp = comps.Popup;
-
-                      if (!MapContainerComp || !TileLayerComp || !CircleMarkerComp || !PopupComp) {
-                        return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
-                      }
-
-                      return React.createElement(
-                        MapContainerComp as React.JSXElementConstructor<unknown>,
-                        {
-                          key: mapKey,
-                          whenCreated: (m: unknown) => {
-                            mapRef.current = m;
-                            setTimeout(() => {
-                              try {
-                                (m as { invalidateSize?: () => void }).invalidateSize?.();
-                              } catch {}
-                            }, 120);
-                          },
-                          center: [loc.lat, loc.lng],
-                          zoom: 13,
-                          style: { height: '100%', width: '100%' },
-                          scrollWheelZoom: false,
-                        },
-                        React.createElement(TileLayerComp as React.JSXElementConstructor<unknown>, {
-                          url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          attribution: '&copy; OpenStreetMap contributors',
-                        }),
-                        React.createElement(MapAutoCenter as React.JSXElementConstructor<unknown>, { map: mapRef.current, coords: loc }),
-                        React.createElement(
-                          CircleMarkerComp as React.JSXElementConstructor<unknown>,
-                          { center: [loc.lat, loc.lng], radius: 7, pathOptions: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 } },
-                          React.createElement(PopupComp as React.JSXElementConstructor<unknown>, null, `${selected.title ?? 'موقع'}\n${selected.address ?? ''}`)
-                        )
-                      );
-                    }
-                    return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">لا توجد إحداثيات صالحة لعرض الخريطة</div>;
-                  })()}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 p-3 border-t border-white/6">
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? '')).trim())}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm"
+                {/* Content area: constrained height + scrollable */}
+                <div
+                  className="w-full overflow-y-auto rounded-xl"
+                  style={{
+                    maxHeight: 'calc(100vh - 200px)',
+                    paddingRight: 6,
+                    WebkitOverflowScrolling: 'touch',
+                  }}
                 >
-                  افتح في الخرائط
-                </a>
-                <button onClick={closeDetails} className="px-3 py-2 rounded-md bg-white/6 text-sm">إغلاق</button>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                    {/* Left: image + description */}
+                    <div className="space-y-3">
+                      {selected.image_url || selected.company_logo ? (
+                        <div className="w-full h-48 sm:h-56 rounded-xl border border-white/6 bg-[#07171b] flex items-center justify-center overflow-hidden" style={{ touchAction: 'pinch-zoom' }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={String(selected.image_url ?? selected.company_logo)} alt="صورة الإعلان" className="object-contain max-w-none w-auto h-full" />
+                        </div>
+                      ) : (
+                        <div className="w-full h-48 sm:h-56 bg-[#07171b] rounded-xl border border-white/6 flex items-center justify-center text-white/60">لا توجد صورة</div>
+                      )}
+
+                      <div className="text-[14px] sm:text-sm text-white/70 space-y-2">
+                        <p className="line-clamp-20">{selected.description ?? '—'}</p>
+                      </div>
+                    </div>
+
+                    {/* Right: details table */}
+                    <div>
+                      <div className="bg-transparent rounded-xl border border-white/6 p-2 sm:p-3">
+                        <table className="w-full text-sm sm:text-base" style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+                          <tbody>
+                            <tr>
+                              <td className="w-1/3 text-white/70 align-top py-2 px-2 font-semibold">العنوان</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.title ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الشركة</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.company ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">جهة الاتصال</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.contact ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الهاتف</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.phone ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الفئة</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.category ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">السعر</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.price ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">العنوان التفصيلي</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.address ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الدولة</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.country ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">المحافظة</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.province ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">المدينة</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.city ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الإحداثيات</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.location ?? '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">تاريخ الإنشاء</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</td>
+                            </tr>
+
+                            <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الإعجابات</td>
+                              <td className="text-white/90 align-top py-2 px-2">{formatCount(selected.likes)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Map (fixed logic: use parsed location OR lat/lng fields) */}
+                  <div className="mt-3">
+                    <div className="h-56 lg:h-64 bg-black rounded-xl overflow-hidden border border-white/6">
+                      {(() => {
+                        // compute location from multiple possible sources
+                        const locFromString = parseLocation(selected.location ?? undefined);
+                        const locFromFields =
+                          selected.location_lat != null && selected.location_lng != null
+                            ? { lat: Number(selected.location_lat), lng: Number(selected.location_lng) }
+                            : null;
+                        const loc = locFromString ?? locFromFields;
+
+                        if (!loc) {
+                          return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">لا توجد إحداثيات صالحة لعرض الخريطة</div>;
+                        }
+
+                        if (!LeafletLoaded || !LeafletRef.current) {
+                          return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
+                        }
+
+                        const comps = LeafletRef.current as LeafletComponents;
+                        const MapContainerComp = comps.MapContainer;
+                        const TileLayerComp = comps.TileLayer;
+                        const CircleMarkerComp = comps.CircleMarker;
+                        const PopupComp = comps.Popup;
+
+                        if (!MapContainerComp || !TileLayerComp || !CircleMarkerComp || !PopupComp) {
+                          return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
+                        }
+
+                        // render react-leaflet components dynamically
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        return React.createElement(
+                          MapContainerComp as any,
+                          {
+                            key: mapKey,
+                            whenCreated: (m: unknown) => {
+                              mapRef.current = m;
+                              setTimeout(() => {
+                                try {
+                                  (m as { invalidateSize?: () => void }).invalidateSize?.();
+                                } catch {}
+                              }, 120);
+                            },
+                            center: [loc.lat, loc.lng],
+                            zoom: 13,
+                            style: { height: '100%', width: '100%' },
+                            scrollWheelZoom: false,
+                          },
+                          React.createElement(TileLayerComp as any, {
+                            url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            attribution: '&copy; OpenStreetMap contributors',
+                          }),
+                          React.createElement(MapAutoCenter as any, { map: mapRef.current, coords: loc }),
+                          React.createElement(
+                            CircleMarkerComp as any,
+                            { center: [loc.lat, loc.lng], radius: 8, pathOptions: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 } },
+                            React.createElement(PopupComp as any, null, `${selected.title ?? selected.company ?? 'موقع'}\n${selected.address ?? ''}`)
+                          )
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer actions */}
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(((selected.location ?? '') + ' ' + (selected.address ?? '') + ' ' + (selected.city ?? '')).trim())}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-sm"
+                  >
+                    افتح في الخرائط
+                  </a>
+                  <button onClick={() => closeDetails()} className="px-3 py-2 rounded-md bg-white/6 text-sm">إغلاق</button>
+                </div>
               </div>
             </div>
           </div>
