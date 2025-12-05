@@ -41,11 +41,15 @@ type Comm = {
   [key: string]: unknown;
 };
 
+/**
+ * استخدمت ComponentType<Record<string, unknown>> بدلاً من any
+ * لتجنّب تحذيرات no-explicit-any مع الحفاظ على قابلية استدعاء المكوّنات ديناميكياً.
+ */
 type LeafletComponents = {
-  MapContainer?: React.JSXElementConstructor<any>;
-  TileLayer?: React.JSXElementConstructor<any>;
-  Popup?: React.JSXElementConstructor<any>;
-  CircleMarker?: React.JSXElementConstructor<any>;
+  MapContainer?: React.ComponentType<Record<string, unknown>>;
+  TileLayer?: React.ComponentType<Record<string, unknown>>;
+  Popup?: React.ComponentType<Record<string, unknown>>;
+  CircleMarker?: React.ComponentType<Record<string, unknown>>;
 };
 
 /* ---------- Helpers ---------- */
@@ -201,11 +205,12 @@ export default function SearchCommForm() {
           console.warn('leaflet icon fix failed', err);
         }
 
+        // assign components with safe type
         LeafletRef.current = {
-          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<any>,
-          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<any>,
-          Popup: (reactLeafletModule as Record<string, unknown>).Popup as React.JSXElementConstructor<any>,
-          CircleMarker: (reactLeafletModule as Record<string, unknown>).CircleMarker as React.JSXElementConstructor<any>,
+          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.ComponentType<Record<string, unknown>>,
+          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.ComponentType<Record<string, unknown>>,
+          Popup: (reactLeafletModule as Record<string, unknown>).Popup as React.ComponentType<Record<string, unknown>>,
+          CircleMarker: (reactLeafletModule as Record<string, unknown>).CircleMarker as React.ComponentType<Record<string, unknown>>,
         };
 
         if (mounted) setLeafletLoaded(true);
@@ -274,8 +279,6 @@ export default function SearchCommForm() {
   }, [comms, category, country, province, city, q]);
 
   /* ---------- helpers ---------- */
-  const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleString() : '');
-
   const openDetails = (c: Comm) => {
     setSelected(c);
     setMapKey((k) => k + 1);
@@ -574,7 +577,7 @@ export default function SearchCommForm() {
                       )}
 
                       <div className="text-[14px] sm:text-sm text-white/70 space-y-2">
-                        <p className="line-clamp-4">{selected.description ?? '—'}</p>
+                        <p className="line-clamp-20">{selected.description ?? '—'}</p>
                       </div>
                     </div>
 
@@ -691,15 +694,13 @@ export default function SearchCommForm() {
                                 } catch {}
                               }, 120);
                             }}
-                            center={[loc.lat, loc.lng]}
-                            zoom={13}
-                            style={{ height: '100%', width: '100%' }}
-                            scrollWheelZoom={false}
+                            // props passed as unknown-record; react-leaflet will accept them at runtime
+                            {...({ center: [loc.lat, loc.lng], zoom: 13, style: { height: '100%', width: '100%' }, scrollWheelZoom: false } as Record<string, unknown>)}
                           >
-                            <TileLayerComp url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+                            <TileLayerComp {...({ url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; OpenStreetMap contributors' } as Record<string, unknown>)} />
                             <MapAutoCenter map={mapRef.current} coords={loc} />
-                            <CircleMarkerComp center={[loc.lat, loc.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 }}>
-                              <PopupComp>{`${selected.title ?? selected.company ?? 'موقع'}\`n${selected.address ?? ''}`}</PopupComp>
+                            <CircleMarkerComp {...({ center: [loc.lat, loc.lng], radius: 8, pathOptions: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 } } as Record<string, unknown>)}>
+                              <PopupComp>{`${selected.title ?? selected.company ?? 'موقع'}\n${selected.address ?? ''}`}</PopupComp>
                             </CircleMarkerComp>
                           </MapContainerComp>
                         );
