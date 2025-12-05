@@ -42,10 +42,10 @@ type Comm = {
 };
 
 type LeafletComponents = {
-  MapContainer?: React.JSXElementConstructor<unknown>;
-  TileLayer?: React.JSXElementConstructor<unknown>;
-  Popup?: React.JSXElementConstructor<unknown>;
-  CircleMarker?: React.JSXElementConstructor<unknown>;
+  MapContainer?: React.JSXElementConstructor<any>;
+  TileLayer?: React.JSXElementConstructor<any>;
+  Popup?: React.JSXElementConstructor<any>;
+  CircleMarker?: React.JSXElementConstructor<any>;
 };
 
 /* ---------- Helpers ---------- */
@@ -122,12 +122,6 @@ export default function SearchCommForm() {
   // likes local tracking and animation state
   const [likedLocal, setLikedLocal] = useState<Record<string, boolean>>({});
   const [likeAnimating, setLikeAnimating] = useState<Record<string, boolean>>({});
-
-  const getString = (obj: Comm | null, key: string) => {
-    if (!obj) return undefined;
-    const v = obj[key];
-    return typeof v === 'string' && v ? v : undefined;
-  };
 
   /* ---------- fetch data (client-only supabase) ---------- */
   const fetchComms = async () => {
@@ -208,10 +202,10 @@ export default function SearchCommForm() {
         }
 
         LeafletRef.current = {
-          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<unknown>,
-          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<unknown>,
-          Popup: (reactLeafletModule as Record<string, unknown>).Popup as React.JSXElementConstructor<unknown>,
-          CircleMarker: (reactLeafletModule as Record<string, unknown>).CircleMarker as React.JSXElementConstructor<unknown>,
+          MapContainer: (reactLeafletModule as Record<string, unknown>).MapContainer as React.JSXElementConstructor<any>,
+          TileLayer: (reactLeafletModule as Record<string, unknown>).TileLayer as React.JSXElementConstructor<any>,
+          Popup: (reactLeafletModule as Record<string, unknown>).Popup as React.JSXElementConstructor<any>,
+          CircleMarker: (reactLeafletModule as Record<string, unknown>).CircleMarker as React.JSXElementConstructor<any>,
         };
 
         if (mounted) setLeafletLoaded(true);
@@ -463,7 +457,6 @@ export default function SearchCommForm() {
                       <div className="post-header">
                         <div className="w-11 h-11 rounded-full overflow-hidden bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center flex-shrink-0 ml-1">
                           {image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={String(image)} alt="avatar" className="object-cover w-full h-full" />
                           ) : (
                             <div className="text-xs text-white/90">لا صورة</div>
@@ -486,7 +479,6 @@ export default function SearchCommForm() {
 
                         {image && (
                           <div className="post-image">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={String(image)} alt="post image" className="w-full h-auto object-cover" />
                           </div>
                         )}
@@ -538,7 +530,7 @@ export default function SearchCommForm() {
           </section>
         </div>
 
-        {/* Details modal - table + vertical scroll (fixed map logic) */}
+        {/* Details modal - table + vertical scroll (fixed map logic and types) */}
         {selected && (
           <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" style={{ perspective: 1000 }}>
             <div className="absolute inset-0 bg-black/70" onClick={closeDetails} />
@@ -575,7 +567,6 @@ export default function SearchCommForm() {
                     <div className="space-y-3">
                       {selected.image_url || selected.company_logo ? (
                         <div className="w-full h-48 sm:h-56 rounded-xl border border-white/6 bg-[#07171b] flex items-center justify-center overflow-hidden" style={{ touchAction: 'pinch-zoom' }}>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={String(selected.image_url ?? selected.company_logo)} alt="صورة الإعلان" className="object-contain max-w-none w-auto h-full" />
                         </div>
                       ) : (
@@ -583,7 +574,7 @@ export default function SearchCommForm() {
                       )}
 
                       <div className="text-[14px] sm:text-sm text-white/70 space-y-2">
-                        <p className="line-clamp-20">{selected.description ?? '—'}</p>
+                        <p className="line-clamp-4">{selected.description ?? '—'}</p>
                       </div>
                     </div>
 
@@ -683,44 +674,34 @@ export default function SearchCommForm() {
                         }
 
                         const comps = LeafletRef.current as LeafletComponents;
-                        const MapContainerComp = comps.MapContainer;
-                        const TileLayerComp = comps.TileLayer;
-                        const CircleMarkerComp = comps.CircleMarker;
-                        const PopupComp = comps.Popup;
+                        const MapContainerComp = comps.MapContainer!;
+                        const TileLayerComp = comps.TileLayer!;
+                        const CircleMarkerComp = comps.CircleMarker!;
+                        const PopupComp = comps.Popup!;
 
-                        if (!MapContainerComp || !TileLayerComp || !CircleMarkerComp || !PopupComp) {
-                          return <div className="w-full h-full flex items-center justify-center text-white/60 px-4">تحميل الخريطة...</div>;
-                        }
-
-                        // render react-leaflet components dynamically
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        return React.createElement(
-                          MapContainerComp as any,
-                          {
-                            key: mapKey,
-                            whenCreated: (m: unknown) => {
+                        // render react-leaflet components dynamically using JSX with typed constructors
+                        return (
+                          <MapContainerComp
+                            key={mapKey}
+                            whenCreated={(m: unknown) => {
                               mapRef.current = m;
                               setTimeout(() => {
                                 try {
                                   (m as { invalidateSize?: () => void }).invalidateSize?.();
                                 } catch {}
                               }, 120);
-                            },
-                            center: [loc.lat, loc.lng],
-                            zoom: 13,
-                            style: { height: '100%', width: '100%' },
-                            scrollWheelZoom: false,
-                          },
-                          React.createElement(TileLayerComp as any, {
-                            url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            attribution: '&copy; OpenStreetMap contributors',
-                          }),
-                          React.createElement(MapAutoCenter as any, { map: mapRef.current, coords: loc }),
-                          React.createElement(
-                            CircleMarkerComp as any,
-                            { center: [loc.lat, loc.lng], radius: 8, pathOptions: { color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 } },
-                            React.createElement(PopupComp as any, null, `${selected.title ?? selected.company ?? 'موقع'}\n${selected.address ?? ''}`)
-                          )
+                            }}
+                            center={[loc.lat, loc.lng]}
+                            zoom={13}
+                            style={{ height: '100%', width: '100%' }}
+                            scrollWheelZoom={false}
+                          >
+                            <TileLayerComp url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" />
+                            <MapAutoCenter map={mapRef.current} coords={loc} />
+                            <CircleMarkerComp center={[loc.lat, loc.lng]} radius={8} pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.95 }}>
+                              <PopupComp>{`${selected.title ?? selected.company ?? 'موقع'}\`n${selected.address ?? ''}`}</PopupComp>
+                            </CircleMarkerComp>
+                          </MapContainerComp>
                         );
                       })()}
                     </div>
