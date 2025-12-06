@@ -147,7 +147,7 @@ export default function VisitorPage() {
       <footer className="relative z-10 mt-auto py-6">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/60">
           <div>© {new Date().getFullYear()} منصة التجارة العالمية</div>
-          <div>النسخة التجريبية — تصميم متجاوب</div>
+          <div>  ادارة الاعمال العالمية —  ANTER SPACE</div>
         </div>
       </footer>
 
