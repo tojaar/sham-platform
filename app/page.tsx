@@ -121,7 +121,7 @@ const HomePage: React.FC = () => {
 
             <div>
               <div className="brand-title">ENTER SPACE</div>
-              <div className="brand-sub">شركة انتر سبيس للتجارة العالمية</div>
+              <div className="brand-sub"> شركة انتر سبيس للتجارة العالمية  </div>
             </div>
           </div>
 
@@ -131,7 +131,7 @@ const HomePage: React.FC = () => {
 
         <section className="card" aria-labelledby="main-title">
           <h1 id="main-title" className="title">ابدأ الآن</h1>
-          <p className="subtitle">اعلانات تجارية. وفرص عمل واسعة .تقنية متطورة وبحث متقدم.</p>
+          <p className="subtitle">اعلانات تجارية. وفرص عمل واسعة .تقنية متطورة وبحث متقدم  .</p>
 
           <div className="buttons" role="list" aria-label="روابط سريعة">
             <Link href="/search" className="btn v" role="listitem" aria-label="زائر">
