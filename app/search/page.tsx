@@ -81,7 +81,7 @@ export default function VisitorPage() {
                     <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold">البحث عن عمل   </h3>
+                <h3 className="text-lg font-semibold">البحث عن عمل </h3>
                 <p className="mt-2 text-sm text-white/85">ابحث عن عمل مناسب لقدراتك في موقعك.</p>
               </div>
               <span className="absolute -bottom-3 right-4 text-xs text-white/60 group-hover:text-white transition">اعثر على عمل او وظيفة →</span>
@@ -146,8 +146,8 @@ export default function VisitorPage() {
       {/* Footer بسيط متوافق مع الهواتف */}
       <footer className="relative z-10 mt-auto py-6">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/60">
-          <div>© {new Date().getFullYear()} منصة التجارة العالمية</div>
-          <div>  ادارة الاعمال العالمية —  ANTER SPACE</div>
+          <div>© {new Date().getFullYear()}منصة التجارة العالمية</div>
+          <div>ادارة الاعمال العالمية —  ANTER SPACE</div>
         </div>
       </footer>
 
