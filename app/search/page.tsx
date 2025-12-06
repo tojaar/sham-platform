@@ -40,7 +40,7 @@ export default function VisitorPage() {
       <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pb-12 pt-8 min-h-[calc(100vh-4rem)]">
         <div className="max-w-3xl">
           <h1 className="text-3xl sm:text-5xl font-extrabold leading-tight text-white drop-shadow-lg">
-            مرحبا بك في منصة التجارة العالمية
+            مرحبا بك في انترسبيس للتجارة العالمية
           </h1>
           <p className="mt-4 text-sm sm:text-base text-white/80 max-w-2xl mx-auto">
             اكتشف فرص العمل، أو اعثر على موظف/عامل مناسب، أو تصفّح أحدث الإعلانات التجارية. اختَر ما تريد للبدء بسرعة وأمان.
@@ -62,10 +62,10 @@ export default function VisitorPage() {
                     <path d="M9 3h6v4H9z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold">البحث عن عمل</h3>
-                <p className="mt-2 text-sm text-white/85">اعثر على وظائف مناسبة لقدراتك وموقعك.</p>
+                <h3 className="text-lg font-semibold">البحث عن موظف أو عامل</h3>
+                <p className="mt-2 text-sm text-white/85">ابحث عن موظفين وعمال في منطقتك.</p>
               </div>
-              <span className="absolute -bottom-3 right-4 text-xs text-white/60 group-hover:text-white transition">ابدأ الآن →</span>
+              <span className="absolute -bottom-3 right-4 text-xs text-white/60 group-hover:text-white transition"> ابحث عن الموظف او العامل المناسب →</span>
             </button>
 
             {/* زر 2 */}
@@ -81,10 +81,10 @@ export default function VisitorPage() {
                     <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold">البحث عن موظف أو عامل</h3>
-                <p className="mt-2 text-sm text-white/85">انشر متطلباتك واطّلع على السير الذاتية مباشرة.</p>
+                <h3 className="text-lg font-semibold">البحث عن عمل   </h3>
+                <p className="mt-2 text-sm text-white/85">ابحث عن عمل مناسب لقدراتك في موقعك.</p>
               </div>
-              <span className="absolute -bottom-3 right-4 text-xs text-white/60 group-hover:text-white transition">انشر طلبك →</span>
+              <span className="absolute -bottom-3 right-4 text-xs text-white/60 group-hover:text-white transition">اعثر على عمل او وظيفة →</span>
             </button>
 
             {/* زر 3 */}

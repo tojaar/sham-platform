@@ -357,7 +357,7 @@ export default function SearchSeekerForm() {
         <div className="max-w-6xl mx-auto px-4 py-6">
           <header className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 justify-between mb-6">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">الباحثون عن عمل</h1>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">ابحث عن عمال او موظفين </h1>
               <p className="mt-1 text-sm text-white/70">تصفح المنشورات كما في فيسبوك — تفاعل واطّلع على التفاصيل</p>
             </div>
 

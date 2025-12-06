@@ -238,10 +238,10 @@ export default function LoginPage() {
                     transform: "translateZ(24px)",
                   }}
                 >
-                  شركة تجار العالمية
+                    ENTER SPAECE
                 </div>
                 <div style={{ fontSize: 13, color: "#bfe9ff", marginTop: 2 }}>
-                  مرحباً بك في شركة تجار العالمية
+                  مرحباً بك في شركة انترسبيس العالمية
                 </div>
               </div>
             </div>

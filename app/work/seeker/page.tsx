@@ -452,7 +452,7 @@ setTimeout(() => setNotice(null), 3000);
 
           <h1 style={{ margin: '12px 0 6px', fontSize: 22, lineHeight: 1.05, fontWeight: 800 }}>سجل طلبك بسهولة — سنساعدك في العثور على فرص</h1>
           <p style={{ margin: 0, color: 'rgba(255,255,255,0.75)', fontSize: 13, maxWidth: 760, marginLeft: 'auto', marginRight: 'auto' }}>
-            املأ البيانات الأساسية، أضف صورة أو شهادة، وحدد موقع السكن إن رغبت. سنراجع الطلب ونوافيك بالنتيجة.
+            املأ البيانات الأساسية، أضف صورة أو شهادة، وحدد موقع السكن . سنراجع الطلب ونوافيك بالنتيجة.
           </p>
         </section>
 
@@ -690,7 +690,7 @@ setTimeout(() => setNotice(null), 3000);
 
         {/* Footer / Help */}
         <section className="footer">
-          <div>هل تحتاج مساعدة؟ تواصل معنا عبر الواتساب بعد إرسال الطلب.</div>
+          <div>  شركة انترسبيس للتجارة العالمية والاعمال .</div>
           <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>نحترم خصوصيتك ونحافظ على بياناتك.</div>
         </section>
       </div>

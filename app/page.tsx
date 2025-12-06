@@ -120,8 +120,8 @@ const HomePage: React.FC = () => {
             </div>
 
             <div>
-              <div className="brand-title">Tijar</div>
-              <div className="brand-sub">واجهة مُبسطة ومناسبة للهواتف</div>
+              <div className="brand-title">ENTER SPACE</div>
+              <div className="brand-sub"> شركة انتر سبيس للتجارة العالمية  </div>
             </div>
           </div>
 
@@ -131,7 +131,7 @@ const HomePage: React.FC = () => {
 
         <section className="card" aria-labelledby="main-title">
           <h1 id="main-title" className="title">ابدأ الآن</h1>
-          <p className="subtitle">أزرار واضحة، نص مقروء، ومساحات لمس واسعة لتجربة مريحة على الهاتف.</p>
+          <p className="subtitle">اعلانات تجارية. وفرص عمل واسعة .تقنية متطورة وبحث متقدم  .</p>
 
           <div className="buttons" role="list" aria-label="روابط سريعة">
             <Link href="/search" className="btn v" role="listitem" aria-label="زائر">
@@ -149,7 +149,7 @@ const HomePage: React.FC = () => {
                 <FaStore width={28} height={28} />
               </div>
               <div className="text">
-                <div className="main">انشر إعلاناتك</div>
+                <div className="main">انشر إعلاناتك التجارية</div>
                 <div className="sub">لوحة نشر مبسطة للتجار</div>
               </div>
             </Link>
@@ -169,13 +169,13 @@ const HomePage: React.FC = () => {
                 <FaBriefcase width={28} height={28} />
               </div>
               <div className="text">
-                <div className="main">العمل</div>
+                <div className="main">انشر لطلب عمل او عمال</div>
                 <div className="sub">فرص ومهام متاحة</div>
               </div>
             </Link>
           </div>
 
-          <div className="footer">نسخة تجريبية · دعم الهاتف</div>
+          <div className="footer">الشركة العالمية للتجارة واللأعمال· جميع الحقوق محفوظة</div>
         </section>
       </div>
 

@@ -210,10 +210,10 @@ export default function ProducerRegisterPage() {
           </div>
 
           <h1 className="mt-6 text-3xl sm:text-4xl font-extrabold leading-tight text-white">
-            انضم الآن وابدأ البيع بثقة
+            انضم الآن وابدأ الربح بثقة
           </h1>
           <p className="mt-2 text-sm text-white/70 max-w-xl mx-auto px-4">
-            سجل كعضو منتج للوصول إلى أدوات البيع، إدارة الطلبات، ودعم مخصص. تجربة سريعة وآمنة على الهاتف.
+            سجل كعضو منتج للوصول إلى جني الارباح، إدارة الطلبات، ودعم مخصص. تجربة سريعة وآمنة على الهاتف.
           </p>
         </header>
 
@@ -247,8 +247,8 @@ export default function ProducerRegisterPage() {
                   </div>
 
                   <div className="hidden sm:flex items-center gap-2">
-                    <div className="text-xs text-white/60">خطة تجريبية</div>
-                    <div className="px-3 py-1 rounded-full bg-amber-400 text-black text-xs font-semibold">مجاناً 7 أيام</div>
+                    <div className="text-xs text-white/60">شركة انترسبيس العالمية </div>
+                    <div className="px-3 py-1 rounded-full bg-amber-400 text-black text-xs font-semibold"> ENTER SPACE </div>
                   </div>
                 </div>
 
@@ -420,14 +420,14 @@ export default function ProducerRegisterPage() {
                 </div>
 
                 <div className="mt-3 text-xs text-white/60">
-                  <strong>ملاحظة</strong> اختر وسيلة الدفع لعرض الحقول والتعليمات الخاصة بها. الحقول غير المتعلقة بالطريقة المختارة ستُغلق وتُمسح تلقائياً.
+                  <strong>ملاحظة</strong> اختر وسيلة الدفع لعرض الحقول والتعليمات الخاصة بها.
                 </div>
               </form>
             </div>
 
             <div className="border-t border-white/6 px-6 py-3 text-xs text-white/60 flex items-center justify-between">
               <div>الخصوصية والأمان مضمونة</div>
-              <div className="hidden sm:block">دعم 24/7 • أدوات إدارة متقدمة</div>
+              <div className="hidden sm:block">دعم متكامل • أدوات إدارة متقدمة</div>
             </div>
           </div>
         </div>
@@ -492,7 +492,7 @@ export default function ProducerRegisterPage() {
         </div>
 
         <div className="mt-6 text-center text-white/60 text-xs px-4">
-          هل تحتاج مساعدة؟ تواصل معنا عبر الواتساب بعد التسجيل أو أثناءه.
+          تتم مراجعة طلب التسجيل من قبل الادارة . يتم الرد خلال 24 ساعة.
         </div>
       </div>
     </main>

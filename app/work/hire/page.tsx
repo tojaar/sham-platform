@@ -503,7 +503,7 @@ export default function HireForm() {
         </form>
 
         <footer className="mt-8 text-center text-gray-400 text-sm">
-          هل تحتاج مساعدة؟ تواصل معنا عبر الواتساب بعد إرسال الإعلان.
+          شركة انترسبيس للتجارة العالمية والاعمال.
         </footer>
       </div>
     </main>
