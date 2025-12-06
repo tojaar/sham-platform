@@ -207,7 +207,7 @@ export default async function UserPage({ params }: Props) {
         />
 
         <footer style={{ marginTop: 18, textAlign: "center", color: "#93bfff", fontSize: 13 }}>
-          استمر بدعوة الأصدقاء — تحصد الجوائز كلما تقدمت
+         _نصف ارباح الاعلانات للاعضاء استمر بدعوة الأصدقاء — تحصد الجوائز كلما تقدمت
         </footer>
       </div>
     </main>
