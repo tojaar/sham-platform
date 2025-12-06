@@ -40,7 +40,7 @@ export default function VisitorPage() {
       <section className="relative z-10 flex flex-col items-center justify-center text-center px-6 pb-12 pt-8 min-h-[calc(100vh-4rem)]">
         <div className="max-w-3xl">
           <h1 className="text-3xl sm:text-5xl font-extrabold leading-tight text-white drop-shadow-lg">
-            مرحبا بك في انترسبيس للتجارة العالمية
+            مرحبا بك في انترسبيس للتجارة العالمية.
           </h1>
           <p className="mt-4 text-sm sm:text-base text-white/80 max-w-2xl mx-auto">
             اكتشف فرص العمل، أو اعثر على موظف/عامل مناسب، أو تصفّح أحدث الإعلانات التجارية. اختَر ما تريد للبدء بسرعة وأمان.
