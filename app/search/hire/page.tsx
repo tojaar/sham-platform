@@ -410,7 +410,7 @@ export default function SearchHirePage() {
           {/* Header */}
           <header className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 justify-between mb-4 sm:mb-6">
             <div>
-              <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight"> ابحث عن عمل</h1>
+              <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight">ابحث عن عمل</h1>
               <p className="mt-1 text-xs sm:text-sm text-white/70">استخدم الفلاتر للعثور على إعلان التوظيف المناسب.</p>
             </div>
 
