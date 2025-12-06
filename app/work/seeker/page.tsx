@@ -690,7 +690,7 @@ setTimeout(() => setNotice(null), 3000);
 
         {/* Footer / Help */}
         <section className="footer">
-          <div>  شركة انترسبيس للتجارة العالمية والاعمال .</div>
+          <div> شركة انترسبيس للتجارة العالمية والاعمال.</div>
           <div style={{ marginTop: 6, color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>نحترم خصوصيتك ونحافظ على بياناتك.</div>
         </section>
       </div>
