@@ -247,7 +247,7 @@ export default function ProducerRegisterPage() {
                   </div>
 
                   <div className="hidden sm:flex items-center gap-2">
-                    <div className="text-xs text-white/60">شركة انترسبيس العالمية </div>
+                    <div className="text-xs text-white/60">شركة انترسبيس العالمية</div>
                     <div className="px-3 py-1 rounded-full bg-amber-400 text-black text-xs font-semibold"> ENTER SPACE </div>
                   </div>
                 </div>
