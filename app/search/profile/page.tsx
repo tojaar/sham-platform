@@ -86,7 +86,7 @@ const ProfilePage: FC = () => {
         <strong>البريد الإلكتروني:</strong> {user.email ?? '—'}
       </p>
       <p>
-        <strong>الدور:</strong> {role}
+        <strong>الدورة:</strong> {role}
       </p>
       <p>
         <strong>المعرف:</strong> {user.id ?? '—'}
