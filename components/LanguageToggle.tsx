@@ -1,7 +1,7 @@
 // components/LanguageToggle.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, KeyboardEvent } from 'react';
 
 type Locale = 'ar' | 'en' | 'fr' | 'zh' | 'hi' | 'tr';
 
@@ -13,6 +13,13 @@ const LOCALES: { code: Locale; label: string; native: string }[] = [
   { code: 'hi', label: 'हिन्दी', native: 'हिन्दी' },
   { code: 'tr', label: 'Türkçe', native: 'Türkçe' },
 ];
+
+/* Extend global Window to include debug hook for locale */
+declare global {
+  interface Window {
+    __app_locale?: Locale;
+  }
+}
 
 export default function LanguageToggle({ defaultLocale = 'ar' }: { defaultLocale?: Locale }) {
   const [locale, setLocale] = useState<Locale>(() => {
@@ -27,14 +34,25 @@ export default function LanguageToggle({ defaultLocale = 'ar' }: { defaultLocale
       document.documentElement.lang = locale;
       document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
       localStorage.setItem('locale', locale);
-    } catch {}
+    } catch {
+      /* ignore DOM/storage errors */
+    }
   }, [locale]);
 
   // Expose a small API on window for debugging or other scripts (optional, safe)
   useEffect(() => {
-    // @ts-ignore
     window.__app_locale = locale;
   }, [locale]);
+
+  const handleOptionKey = (e: KeyboardEvent, code: Locale) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setLocale(code);
+      setOpen(false);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
 
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -56,6 +74,7 @@ export default function LanguageToggle({ defaultLocale = 'ar' }: { defaultLocale
           fontSize: 13,
         }}
         title="تغيير لغة الواجهة"
+        aria-label="Toggle language"
       >
         <span style={{ fontWeight: 900, minWidth: 18, textAlign: 'center' }}>{locale.toUpperCase()}</span>
         <span style={{ opacity: 0.9 }}>
@@ -85,23 +104,24 @@ export default function LanguageToggle({ defaultLocale = 'ar' }: { defaultLocale
           }}
         >
           {LOCALES.map((l) => (
-            <li key={l.code}>
+            <li key={l.code} role="presentation">
               <button
+                role="option"
+                aria-selected={l.code === locale}
                 onClick={() => {
                   setLocale(l.code);
                   setOpen(false);
                 }}
+                onKeyDown={(e) => handleOptionKey(e, l.code)}
                 style={{
                   width: '100%',
                   textAlign: 'left',
                   padding: '8px 10px',
-                  borderRadius: 8,
-                  background: l.code === locale ? 'linear-gradient(90deg,#06b6d4,#7c3aed)' : 'transparent',
+                  borderRadius: 8,background: l.code === locale ? 'linear-gradient(90deg,#06b6d4,#7c3aed)' : 'transparent',
                   color: l.code === locale ? '#001219' : '#071026',
                   fontWeight: 800,
                   cursor: 'pointer',
                 }}
-                aria-selected={l.code === locale}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>{l.native}</span>
