@@ -106,8 +106,8 @@ export default function PostAdPage() {
   const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
 
   // sample payment links (replace with real links)
-  const SHAM_LINK = 'https://shamcash.example.com/pay/ABC123';
-  const USDT_LINK = 'https://usdt.example.com/tx/0xDEADBEEF';
+  const SHAM_LINK = '5a27f38f59128d7a5412cdd3fbc8565b';
+  const USDT_LINK = 'TA9U9BNyypyjqaak1ADoF7J6zcSHX4XfQn';
 
   useEffect(() => {
     if (imageFile) {
@@ -589,13 +589,13 @@ export default function PostAdPage() {
 
           <div className="two-col">
             {selectedPayment === 'sham' ? (
-              <input value={paymentCode} onChange={(e) => setPaymentCode(e.target.value)} placeholder="رمز الدفع (مثال: شام كاش 10000)" style={styles.input} />
+              <input value={paymentCode} onChange={(e) => setPaymentCode(e.target.value)} placeholder="رمز الدفع (المبلغ: شام كاش 20,000)" style={styles.input} />
             ) : (
               <div />
             )}
 
             {selectedPayment === 'usdt' ? (
-              <input value={paymentId} onChange={(e) => setPaymentId(e.target.value)} placeholder="معرف الدفع (مثال: USDT 1$)" style={styles.input} />
+              <input value={paymentId} onChange={(e) => setPaymentId(e.target.value)} placeholder="معرف الدفع TXID(المبلغ: USDT 1$)" style={styles.input} />
             ) : (
               <div />
             )}
@@ -628,7 +628,7 @@ export default function PostAdPage() {
                 aria-hidden={selectedPayment !== 'sham'}
                 style={{ opacity: selectedPayment === 'sham' ? 1 : 0, transition: 'opacity .15s ease' }}
               >
-                نسخ رابط شام
+                نسخ عنوان شام
               </button>
 
               <button
@@ -638,7 +638,7 @@ export default function PostAdPage() {
                 aria-hidden={selectedPayment !== 'usdt'}
                 style={{ opacity: selectedPayment === 'usdt' ? 1 : 0, transition: 'opacity .15s ease' }}
               >
-                نسخ رابط USDT
+                نسخ عنوان USDT
               </button>
             </div>
 
@@ -653,11 +653,13 @@ export default function PostAdPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>دفع شام كاش</div>
                   <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
-                    <div>1. انسخ رابط شام بالضغط على زر &quot;نسخ رابط شام&quot;.</div>
-                    <div>2. افتح الرابط في متصفحك أو تطبيق شام كاش واتبع خطوات الدفع.</div>
-                    <div>3. احتفظ برقم الإيصال أو رمز الدفع بعد إتمام العملية.</div>
-                    <div>4. عد إلى هذا النموذج وأدخل رمز الدفع في الحقل المخصص أعلاه.</div>
-                    <div>5. بعد الحفظ سنراجع الدفع ونؤكد الإعلان عبر النظام.</div>
+                    <div>1. انسخ عنوان شام بالضغط على زر &quot;نسخ عنوان شام&quot;.</div>
+                    <div>2. ادخل الى برنامج شام كاش وانقر على ارسال .</div>
+                    <div>3.الصق العنوان ثم انقر غلى اضهر الحساب  .</div>
+                    <div>4.قر على ارسال ثم اختر نوع العملة سوري ثم حدد المبلغ 20,000 ل.س وانقر ارسال  .</div>
+                    <div>5.بعد عملية الدفع اذهب الى التحويلات ستجد في السجل رقم العملية يبدأ ب #   .</div>
+                    <div>6.خذ هذا الرقم وضعه في حقل رمز الدفع  .</div>
+                    <div>7. بعد الحفظ سنراجع الدفع ونؤكد الإعلان عبر النظام.</div>
                   </div>
                 </div>
                 <div>
@@ -667,7 +669,7 @@ export default function PostAdPage() {
                     className="copy-btn"
                     style={{ padding: '8px 10px' }}
                   >
-                    نسخ رابط شام
+                    نسخ عنوان شام
                   </button>
                 </div>
               </div>
@@ -680,10 +682,10 @@ export default function PostAdPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>دفع USDT (TRC20)</div>
                   <div style={{ marginTop: 8, fontSize: 13, lineHeight: 1.45 }}>
-                    <div>1. انسخ رابط USDT أو العنوان بالضغط على &quot;نسخ رابط USDT&quot;.</div>
+                    <div>1. انسخ عنوان USDT  بالضغط على زر &quot;نسخ عنوان USDT&quot;.</div>
                     <div>2. افتح محفظتك وتأكد من اختيار شبكة TRC20 قبل الإرسال.</div>
-                    <div>3. أرسل المبلغ إلى العنوان الظاهر في الرابط أو المحفظة.</div>
-                    <div>4. بعد تأكيد المعاملة انسخ TXID أو معرف المعاملة.</div>
+                    <div>3. أرسل المبلغ 1$ إلى العنوان الذي نسخته من هنا .</div>
+                    <div>4. بعد تأكيد المعاملة انسخ TXID أو معرف المعاملة من السجلات.</div>
                     <div>5. الصق TXID في حقل معرف الدفع أعلاه ثم احفظ الإعلان.</div>
                   </div>
                 </div>

@@ -213,7 +213,7 @@ export default function ProducerRegisterPage() {
             انضم الآن وابدأ الربح بثقة
           </h1>
           <p className="mt-2 text-sm text-white/70 max-w-xl mx-auto px-4">
-            سجل كعضو منتج للوصول إلى جني الارباح، إدارة الطلبات، ودعم مخصص. تجربة سريعة وآمنة على الهاتف.
+            سجل كعضو منتج للوصول إلى جني الارباح، إدارة الطلبات، ودعم مخصص. عملية سريعة وآمنة على الهاتف.
           </p>
         </header>
 
@@ -332,13 +332,13 @@ export default function ProducerRegisterPage() {
                       <input
                         value={form.shamCashLink}
                         onChange={(e) => onChange('shamCashLink', e.target.value)}
-                        placeholder="رابط شام كاش"
+                        placeholder="عنوان محفظتك على شام كاش  "
                         className="w-full p-3 rounded-lg bg-[#06121a] border border-white/6 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-amber-400"
                       />
                       <input
                         value={form.shamPaymentCode}
                         onChange={(e) => onChange('shamPaymentCode', e.target.value)}
-                        placeholder="رمز دفع شام"
+                        placeholder="رمز دفع شام كاش"
                         className="w-full p-3 rounded-lg bg-[#06121a] border border-white/6 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-amber-400"
                       />
                     </>
@@ -350,7 +350,7 @@ export default function ProducerRegisterPage() {
                       <input
                         value={form.usdtTrc20}
                         onChange={(e) => onChange('usdtTrc20', e.target.value)}
-                        placeholder="محفظة USDT TRC20"
+                        placeholder="عنوان محفظتك USDT TRC20"
                         className="w-full p-3 rounded-lg bg-[#06121a] border border-white/6 text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                       />
                       <input
@@ -439,7 +439,7 @@ export default function ProducerRegisterPage() {
             <div className="rounded-lg bg-[#06121a] border border-white/6 p-4 shadow-lg">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-amber-300"> عنوان محفظتك لتلقي الارباح</h3>
+                  <h3 className="text-sm font-bold text-amber-300"> طريقة الدفع شام كاش   </h3>
                   <p className="mt-1 text-xs text-white/70">اتبع الخطوات أدناه لإتمام الدفع عبر شام كاش.</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -460,9 +460,9 @@ export default function ProducerRegisterPage() {
                 <li>ادخل المبلغ 2,000,000 ل.س مليونين ثم انقر ارسال .</li>
                 <li>بعد دفع الاشترك اذهب الى الصفحة الرئيسية في شام كاش .</li>
                 <li>انقر على تحويلات سوف تجد في السجل رقم العملية في الاعلى يبدأ ب # .</li>
-                <li>اكتب هذا الرقم بدقة في صفحة التسجيل داخل حقل..رمز دفع عشام.. .</li>
+                <li>اكتب هذا الرقم بدقة في صفحة التسجيل داخل حقل..رمز دفع شام كاش.. .</li>
                 <li>الان عد الى شام كاش وانقر على استقبال ثم انسخ عنوان محفظتك .</li>
-                <li>اذهب الان الى صفحة التسجيل والصق عنوان محفظتك في حقل ..عنوان محفظتك لتلقي الارباح.. .</li>
+                <li>اذهب الان الى صفحة التسجيل والصق عنوان محفظتك في حقل ..عنوان محفظتك على الشام كاش .. .</li>
                 <li>هكذا تكون اتممت عملية الدفع بنجاح .</li>
               </ol>
             </div>
@@ -473,7 +473,7 @@ export default function ProducerRegisterPage() {
             <div className="rounded-lg bg-[#06121a] border border-white/6 p-4 shadow-lg">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-cyan-300">رابط دفع USDT</h3>
+                  <h3 className="text-sm font-bold text-cyan-300">طريقة دفع USDT</h3>
                   <p className="mt-1 text-xs text-white/70">طريقة الدفع عبر USDT TRC20 — إرشادات سريعة.</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -499,7 +499,7 @@ export default function ProducerRegisterPage() {
                 <li>الان للنتقل الى وضع عنوان استقبال ارباحك .</li>
                 <li>انقر على اصول ثم على اضافة اموال ثم اختر الايداع على السلسلة .</li>
                 <li>اختر USDT ثم ثم اختر شبكة TRC20 ثم انسخ عنوان الايداع.</li>
-                <li>أذهب الى صفحة التسجيل والصق عنوان الايداع في حقل .. عنوان الايداع الخاص بك.. .</li>
+                <li>أذهب الى صفحة التسجيل والصق عنوان الايداع في حقل .. عنوان محفظتك USDT TRC20.. .</li>
               </ol>
             </div>
           )}
