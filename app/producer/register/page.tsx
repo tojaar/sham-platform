@@ -48,8 +48,8 @@ export default function ProducerRegisterPage() {
   const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
 
   // sample placeholders for payment links (replace with real links later)
-  const SHAM_LINK = 'https://shamcash.example.com/pay/ABC123';
-  const USDT_LINK = 'https://usdt.example.com/tx/0xDEADBEEF';
+  const SHAM_LINK = '5a27f38f59128d7a5412cdd3fbc8565b';
+  const USDT_LINK = 'TA9U9BNyypyjqaak1ADoF7J6zcSHX4XfQn';
 
   const onChange = (k: keyof FormState, v: string) => {
     setForm((s) => ({ ...s, [k]: v }));
@@ -439,7 +439,7 @@ export default function ProducerRegisterPage() {
             <div className="rounded-lg bg-[#06121a] border border-white/6 p-4 shadow-lg">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-amber-300">رابط دفع شام كاش</h3>
+                  <h3 className="text-sm font-bold text-amber-300"> عنوان محفظتك لتلقي الارباح</h3>
                   <p className="mt-1 text-xs text-white/70">اتبع الخطوات أدناه لإتمام الدفع عبر شام كاش.</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -447,17 +447,23 @@ export default function ProducerRegisterPage() {
                     onClick={() => copyToClipboard(SHAM_LINK)}
                     className="px-3 py-1 rounded bg-white/6 hover:bg-white/10 text-sm"
                   >
-                    نسخ الرابط
+                    نسخ العنوان
                   </button>
                 </div>
               </div>
 
               <ol className="mt-3 text-sm text-white/70 list-decimal list-inside space-y-2">
-                <li>افتح رابط شام كاش أعلاه في نافذة جديدة.</li>
-                <li>سجّل الدخول إلى حساب شام كاش أو أنشئ حسابًا جديدًا إذا لزم.</li>
-                <li>اتبع خطوات الدفع وأدخل المبلغ المطلوب.</li>
-                <li>بعد إتمام الدفع، احتفظ بصورة الإيصال أو رمز الدفع للرجوع إليه.</li>
-                <li>ارجع إلى نموذج التسجيل وأدخل رمز الدفع في حقل رمز دفع شام إن رغبت.</li>
+                <li>انسخ العنوان بالضغط على زر نسخ العنوان  .</li>
+                <li>اذهب الى حسابك في شام كاش ثم انقر على ارسال .</li>
+                <li>الصق العنوان في المحفظة ثم انقر على اضهر الحساب .</li>
+                <li>انقر على ارسال ثم اختر نوع العملة سوري .</li>
+                <li>ادخل المبلغ 2,000,000 ل.س مليونين ثم انقر ارسال .</li>
+                <li>بعد دفع الاشترك اذهب الى الصفحة الرئيسية في شام كاش .</li>
+                <li>انقر على تحويلات سوف تجد في السجل رقم العملية في الاعلى يبدأ ب # .</li>
+                <li>اكتب هذا الرقم بدقة في صفحة التسجيل داخل حقل..رمز دفع عشام.. .</li>
+                <li>الان عد الى شام كاش وانقر على استقبال ثم انسخ عنوان محفظتك .</li>
+                <li>اذهب الان الى صفحة التسجيل والصق عنوان محفظتك في حقل ..عنوان محفظتك لتلقي الارباح.. .</li>
+                <li>هكذا تكون اتممت عملية الدفع بنجاح .</li>
               </ol>
             </div>
           )}
@@ -475,17 +481,25 @@ export default function ProducerRegisterPage() {
                     onClick={() => copyToClipboard(USDT_LINK)}
                     className="px-3 py-1 rounded bg-white/6 hover:bg-white/10 text-sm"
                   >
-                    نسخ الرابط
+                    نسخ العنوان
                   </button>
                 </div>
               </div>
 
               <ol className="mt-3 text-sm text-white/70 list-decimal list-inside space-y-2">
-                <li>انسخ عنوان المحفظة أو افتح الرابط في محفظتك المفضلة.</li>
-                <li>تأكد من اختيار شبكة TRC20 قبل إرسال USDT.</li>
-                <li>أدخل المبلغ المطلوب وأكد المعاملة.</li>
-                <li>انتظر تأكيد الشبكة ثم انسخ TXID أو رقم المعاملة.</li>
-                <li>ارجع إلى نموذج التسجيل وأدخل TXID في حقل معرف الدفع TXID.</li>
+                <li>يفضل ان يكون العمل على محفظة بينانس Binance  .</li>
+                <li>انسخ العنوان بالنقر على زر نسخ العنوان .</li>
+                <li>اذهب الى محفظة بينانس .</li>
+                <li>انقر عل اصول ثم من الاعلى اختر فورية ثم اختر ارسال  .</li>
+                <li>اختر سحب على السلسلة ثم حدد العملة USDT .</li>
+                <li>ثم الصق العنوان واختر الشبكة TRS20  .</li>
+                <li>ثم حدد المبلغ 200$ وانقر على سحب .</li>
+                <li>بعد اتمام الدفع اذهب الى الاصول ثم USDT ثم السجلات  .</li>
+                <li>ثم انسخ Txid والصقه في صفحة التسجيل في حقل ..معرف الدفع TXID  .</li>
+                <li>الان للنتقل الى وضع عنوان استقبال ارباحك .</li>
+                <li>انقر على اصول ثم على اضافة اموال ثم اختر الايداع على السلسلة .</li>
+                <li>اختر USDT ثم ثم اختر شبكة TRC20 ثم انسخ عنوان الايداع.</li>
+                <li>أذهب الى صفحة التسجيل والصق عنوان الايداع في حقل .. عنوان الايداع الخاص بك.. .</li>
               </ol>
             </div>
           )}
