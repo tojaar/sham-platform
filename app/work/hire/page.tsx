@@ -150,8 +150,8 @@ export default function HireForm() {
   const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
 
   // روابط الدفع (نماذج مؤقتة — استبدلها بروابطك الحقيقية)
-  const SHAM_LINK = 'https://shamcash.example.com/pay/ABC123';
-  const USDT_LINK = 'https://usdt.example.com/tx/0xDEADBEEF';
+  const SHAM_LINK = '5a27f38f59128d7a5412cdd3fbc8565b';
+  const USDT_LINK = 'TA9U9BNyypyjqaak1ADoF7J6zcSHX4XfQn';
 
   const handleChange = (field: keyof FormState, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -369,7 +369,7 @@ export default function HireForm() {
                 <div>
                   <div className="font-bold text-[#7c2d12]">دفع شام كاش</div>
                   <div className="text-sm text-[#7c2d12] mt-1">
-                    انسخ رابط شام ثم اتبع خطوات الدفع. بعد الدفع أدخل رمز الدفع في الحقل أدناه.
+                    انسخ عنوان شام كاش ثم اذهب الى محفظتك وارسل 10,000 ل,س الى العنوان الذي نسخته ثم ادخل الى السجلات سوف تجد رقم عملية الدفع التي تبدأ ب # انسخه وضعه في الحقل المخصص اعلاه.
                   </div>
                 </div>
 
@@ -379,7 +379,7 @@ export default function HireForm() {
                     onClick={() => copyToClipboard(SHAM_LINK)}
                     className="px-3 py-1 rounded bg-white text-black font-semibold"
                   >
-                    نسخ رابط شام
+                    نسخ عنوان شام
                   </button>
                 </div>
               </div>
@@ -406,7 +406,7 @@ export default function HireForm() {
                 <div>
                   <div className="font-bold text-[#064e3b]">دفع USDT (TRC20)</div>
                   <div className="text-sm text-[#064e3b] mt-1">
-                    انسخ رابط USDT أو العنوان ثم أرسل عبر شبكة TRC20. بعد التأكيد أدخل TXID في الحقل أدناه.
+                    انسخ عنوان USDT من زر نسخ USDT ثم اذهب الى محفظتك و أرسل 1$ عبر شبكة TRC20. بعد التأكيد أدخل TXID في الحقل أدناه.
                   </div>
                 </div>
 
@@ -416,7 +416,7 @@ export default function HireForm() {
                     onClick={() => copyToClipboard(USDT_LINK)}
                     className="px-3 py-1 rounded bg-white text-black font-semibold"
                   >
-                    نسخ رابط USDT
+                    نسخ عنوان USDT
                   </button>
                 </div>
               </div>

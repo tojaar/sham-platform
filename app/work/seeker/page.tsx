@@ -142,8 +142,8 @@ export default function SeekerForm() {
   const [selectedPayment, setSelectedPayment] = useState<'sham' | 'usdt' | null>(null);
 
   // sample payment links (replace with real links)
-  const SHAM_LINK = 'https://shamcash.example.com/pay/ABC123';
-  const USDT_LINK = 'https://usdt.example.com/tx/0xDEADBEEF';
+  const SHAM_LINK = '5a27f38f59128d7a5412cdd3fbc8565b';
+  const USDT_LINK = 'TA9U9BNyypyjqaak1ADoF7J6zcSHX4XfQn';
 
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -518,7 +518,7 @@ setTimeout(() => setNotice(null), 3000);
                   aria-hidden={selectedPayment !== 'sham'}
                   style={{ opacity: selectedPayment === 'sham' ? 1 : 0.0, transition: 'opacity .18s ease' }}
                 >
-                  نسخ رابط شام
+                  نسخ عنوان شام
                 </button>
 
                 <button
@@ -528,7 +528,7 @@ setTimeout(() => setNotice(null), 3000);
                   aria-hidden={selectedPayment !== 'usdt'}
                   style={{ opacity: selectedPayment === 'usdt' ? 1 : 0.0, transition: 'opacity .18s ease' }}
                 >
-                  نسخ رابط USDT
+                  نسخ عنوان USDT
                 </button>
               </div>
             </div>
@@ -550,15 +550,16 @@ setTimeout(() => setNotice(null), 3000);
                       onClick={() => copyToClipboard(SHAM_LINK)}
                       className="copy-btn"
                     >
-                      نسخ رابط شام
+                      نسخ عنوان شام
                     </button>
                   </div>
                 </div>
 
                 <ol style={{ marginTop: 10, paddingLeft: 18, color: '#7c2d12', fontSize: 13 }}>
-                  <li>انسخ رابط شام بالضغط على زر نسخ رابط شام.</li>
-                  <li>افتح الرابط في متصفحك أو تطبيق شام كاش واتبع خطوات الدفع.</li>
-                  <li>بعد إتمام الدفع انسخ رمز الدفع أو رقم الإيصال وأدخله في حقل رمز الدفع شام كاش.</li>
+                  <li>انسخ عنوان شام بالضغط على زر نسخ عنوان شام.</li>
+                  <li>اذهب الى شام كاش ثم انقر على ارسال ثم الصق العنوان ثم ارسل 20,000 ل.س  .</li>
+                  <li>بعد إتمام الدفع اذهب الى التحويلات ستجد في السجلات رقم عملية الدفع تبدأ # انسخه.</li>
+                  <li> انسخ رمز الدفع أو رقم الإيصال وأدخله في حقل رمز الدفع شام كاش.</li>
                 </ol>
 
                 <div style={{ marginTop: 12 }}>
@@ -588,14 +589,14 @@ setTimeout(() => setNotice(null), 3000);
                       onClick={() => copyToClipboard(USDT_LINK)}
                       className="copy-btn"
                     >
-                      نسخ رابط USDT
+                      نسخ عنوان USDT
                     </button>
                   </div>
                 </div>
 
                 <ol style={{ marginTop: 10, paddingLeft: 18, color: '#064e3b', fontSize: 13 }}>
                   <li>انسخ رابط USDT بالضغط على زر نسخ رابط USDT.</li>
-                  <li>افتح محفظتك، تأكد من اختيار شبكة TRC20، وأرسل المبلغ إلى العنوان المطلوب.</li>
+                  <li>افتح محفظتك، تأكد من اختيار شبكة TRC20، وأرسل المبلغ 1$ إلى العنوان المطلوب.</li>
                   <li>بعد تأكيد المعاملة انسخ TXID وأدخله في حقل معرف الدفع TXID.</li>
                 </ol>
 
