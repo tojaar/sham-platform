@@ -624,10 +624,7 @@ export default function SearchCommForm() {
                               <td className="text-white/90 align-top py-2 px-2">{selected.city ?? '—'}</td>
                             </tr>
 
-                            <tr>
-                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الإحداثيات</td>
-                              <td className="text-white/90 align-top py-2 px-2">{selected.location ?? '—'}</td>
-                            </tr>
+                          
 
                             <tr>
                               <td className="text-white/70 align-top py-2 px-2 font-semibold">تاريخ الإنشاء</td>
