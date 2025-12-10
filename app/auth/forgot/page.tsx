@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export default function ForgotPage() {
@@ -26,7 +25,14 @@ export default function ForgotPage() {
         {/* شعار المنصة ثلاثي الأبعاد */}
         <div className="forgot-logo">
           <div className="logo-3d">
-            
+            {/* استخدمت وسم img بمسار ثابت من public لضمان العرض بدون أخطاء تحسين next/image */}
+            <img
+              src="/assets/tojar.png"
+              alt="شعار المنصة"
+              width={120}
+              height={120}
+              style={{ objectFit: 'cover', borderRadius: '50%', display: 'block' }}
+            />
           </div>
           <div className="logo-glow" />
         </div>
@@ -130,11 +136,14 @@ export default function ForgotPage() {
           margin-bottom: 16px;
         }
         .logo-3d {
+          width: 120px;
+          height: 120px;
           border-radius: 50%;
           overflow: hidden;
           box-shadow: 0 12px 30px rgba(124,58,237,0.4),
                       0 -6px 20px rgba(6,182,212,0.3);
           transform: rotateY(10deg) rotateX(6deg);
+          display: inline-block;
         }
         .logo-glow {
           position: absolute;
