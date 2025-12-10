@@ -287,7 +287,7 @@ export default function PostAdPage() {
 
       setMessage('✅ تم حفظ الإعلان بنجاح. بانتظار الموافقة.');
       // reset form
-      setCategory('cars');
+      setCategory('سيارت');
       setIsCompany(false);
       setCompanyName('');
       setPersonName('');
@@ -428,13 +428,14 @@ export default function PostAdPage() {
             <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...styles.input, maxWidth: 260 }}>
               <option value="cars">🚗 سيارات</option>
               <option value="عقارات">🏠 عقارات</option>
-              <option value="machines">⚙️ آلات</option>
-              <option value="medical">💊 منتجات طبية</option>
-              <option value="home">🛋 أدوات منزلية</option>
-              <option value="food">🍔 أغذية ومشروبات</option>
-              <option value="clothing">👕 ألبسة</option>
-              <option value="jewelry">💍 مجوهرات</option>
-              <option value="animals">🐾 حيوانات</option>
+              <option value="آلات">⚙️ آلات</option>
+              <option value="منتجات طبيعية">💊 منتجات طبية</option>
+              <option value="أدوات منزلية">🛋 أدوات منزلية</option>
+              <option value="أغذية ومشروبات">🍔 أغذية ومشروبات</option>
+              <option value="ألبسة">👕 ألبسة</option>
+              <option value="مجوهرات">💍 مجوهرات</option>
+              <option value="حيوانات">🐾 حيوانات</option>
+              <option value="منوع">🐾 منوع</option>
             </select>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#cfeff7' }}>
@@ -710,7 +711,7 @@ export default function PostAdPage() {
               </button>
               <button
                 onClick={() => {
-                  setCategory('cars');
+                  setCategory('سيارات');
                   setIsCompany(false);
                   setCompanyName('');
                   setPersonName('');
