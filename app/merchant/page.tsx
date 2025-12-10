@@ -73,7 +73,7 @@ async function getSupabase() {
 /* ---------- Component ---------- */
 
 export default function PostAdPage() {
-  const [category, setCategory] = useState('cars');
+  const [category, setCategory] = useState('سيارات');
   const [isCompany, setIsCompany] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [personName, setPersonName] = useState('');
