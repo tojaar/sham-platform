@@ -643,10 +643,7 @@ export default function SearchHirePage() {
                                 <td className="text-white/90 align-top py-2 px-2">{selected.job_location ?? '—'}</td>
                               </tr>
 
-                              <tr>
-                                <td className="text-white/70 align-top py-2 px-2 font-semibold">العنوان</td>
-                                <td className="text-white/90 align-top py-2 px-2">{selected.address ?? '—'}</td>
-                              </tr>
+                              
 
                               <tr>
                                 <td className="text-white/70 align-top py-2 px-2 font-semibold">الدولة</td>
@@ -658,10 +655,7 @@ export default function SearchHirePage() {
                                 <td className="text-white/90 align-top py-2 px-2">{selected.city ?? '—'}</td>
                               </tr>
 
-                              <tr>
-                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الإحداثيات</td>
-                                <td className="text-white/90 align-top py-2 px-2">{selected.location ?? '—'}</td>
-                              </tr>
+                              
 
                               <tr>
                                 <td className="text-white/70 align-top py-2 px-2 font-semibold">تاريخ الإنشاء</td>

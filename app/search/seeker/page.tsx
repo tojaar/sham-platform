@@ -36,6 +36,7 @@ type Seeker = {
   country?: string | null;
   province?: string | null;
   city?: string | null;
+  residence?: string | null;
   address?: string | null;
   location?: string | null; // "lat,lng"
   payment_code?: string | null;
@@ -572,13 +573,13 @@ export default function SearchSeekerForm() {
                 <table className="intel-table" role="table" aria-label="تفاصيل الباحث">
                   <tbody>
                     <tr>
-                      <th className="intel-key">المعرف</th>
-                      <td className="intel-val">{selected.id}</td>
+                      <th className="intel-key">الاسم</th>
+                      <td className="intel-val">{selected.name}</td>
                     </tr>
 
                     <tr>
-                      <th className="intel-key">الحالة</th>
-                      <td className="intel-val">{selected.approved === true ? 'مقبول' : selected.approved === false ? 'مرفوض' : selected.status ?? 'بانتظار'}</td>
+                      <th className="intel-key">المهنة</th>
+                      <td className="intel-val">{selected.profession ?? '—'}</td>
                     </tr>
 
                     <tr>
@@ -597,8 +598,8 @@ export default function SearchSeekerForm() {
                     </tr>
 
                     <tr>
-                      <th className="intel-key">العنوان</th>
-                      <td className="intel-val">{selected.address ?? '—'}</td>
+                      <th className="intel-key">عنوان السكن</th>
+                      <td className="intel-val">{selected.residence ?? '—'}</td>
                     </tr>
 
                     <tr>
