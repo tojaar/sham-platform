@@ -618,10 +618,7 @@ export default function SearchHirePage() {
                                 <td className="text-white/90 align-top py-2 px-2">{selected.profession ?? selected.title ?? '—'}</td>
                               </tr>
 
-                              <tr>
-                                <td className="text-white/70 align-top py-2 px-2 font-semibold">الاسم</td>
-                                <td className="text-white/90 align-top py-2 px-2">{selected.name ?? '—'}</td>
-                              </tr>
+                              
 
                               <tr>
                                 <td className="text-white/70 align-top py-2 px-2 font-semibold">الهاتف</td>

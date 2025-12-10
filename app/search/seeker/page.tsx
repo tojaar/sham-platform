@@ -557,7 +557,7 @@ export default function SearchSeekerForm() {
                     <div className="text-base font-bold">{selected.profession ?? '—'}</div>
                     <div className="text-sm text-white/70 mt-1">{selected.name ?? '—'}</div>
                   </div>
-                  <div className="intel-badge">ملف استخباراتي</div>
+                  <div className="intel-badge">تفاصيل دقيقة </div>
                 </div>
 
                 <div className="w-full flex items-center justify-center mb-3">
