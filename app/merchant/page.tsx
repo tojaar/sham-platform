@@ -287,7 +287,7 @@ export default function PostAdPage() {
 
       setMessage('✅ تم حفظ الإعلان بنجاح. بانتظار الموافقة.');
       // reset form
-      setCategory('cars');
+      setCategory('سيارة');
       setIsCompany(false);
       setCompanyName('');
       setPersonName('');
@@ -426,8 +426,8 @@ export default function PostAdPage() {
         <div className="merchant-grid">
           <div style={{ display: 'flex', gap: 8 }}>
             <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ ...styles.input, maxWidth: 260 }}>
-              <option value="سيارات">🚗 سيارات</option>
-              <option value="real_estate">🏠 عقارات</option>
+              <option value="سيارة">🚗 سيارات</option>
+              <option value="عقارات">🏠 عقارات</option>
               <option value="machines">⚙️ آلات</option>
               <option value="medical">💊 منتجات طبية</option>
               <option value="home">🛋 أدوات منزلية</option>

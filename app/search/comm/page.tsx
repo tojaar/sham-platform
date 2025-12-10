@@ -28,6 +28,7 @@ type Comm = {
   country?: string | null;
   province?: string | null;
   city?: string | null;
+  name?: string | null;
   address?: string | null;
   location?: string | null;
   image_url?: string | null;
@@ -587,7 +588,10 @@ export default function SearchCommForm() {
                         <table className="w-full text-sm sm:text-base" style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
                           <tbody>
                             
-                              
+                              <tr>
+                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الاسم</td>
+                              <td className="text-white/90 align-top py-2 px-2">{selected.name ?? '—'}</td>
+                            </tr>
 
                             <tr>
                               <td className="text-white/70 align-top py-2 px-2 font-semibold">الهاتف</td>
