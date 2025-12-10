@@ -14,60 +14,54 @@ export default function ForgotPage() {
   }, []);
 
   return (
-    <main className="fp-root" role="main">
-      {/* خلفية زخرفية */}
-      <div className="fp-bg" aria-hidden="true">
-        <div className="fp-grad" />
+    <main className="forgot-root">
+      {/* خلفية إعلامية حديثة */}
+      <div className="forgot-bg" aria-hidden="true">
+        <div className="forgot-gradient" />
+        <div className="forgot-grid" />
       </div>
 
-      <section className="fp-card" aria-labelledby="fp-heading">
-        <div className="fp-top">
-          <div className="fp-badge-3d" aria-hidden="true">
-            <div className="fp-badge-face">
-              <span className="fp-badge-es">ES</span>
-            </div>
-            <div className="fp-badge-edge" />
+      {/* البطاقة الرئيسية */}
+      <section className="forgot-card" aria-labelledby="forgot-heading">
+        {/* شعار المنصة ثلاثي الأبعاد */}
+        <div className="forgot-logo">
+          <div className="logo-3d">
+            
           </div>
-
-          <div className="fp-thumb" aria-hidden="false">
-            {/* استخدم مسار من public: تأكد أن الملف موجود في public/assets/tojat.png */}
-            <Image
-              src="@/assets/tojar.png"
-              alt="شعار المنصة"
-              width={120}
-              height={120}
-              priority
-              style={{ objectFit: 'cover', borderRadius: 14 }}
-            />
-            <div className="fp-thumb-gloss" />
-          </div>
+          <div className="logo-glow" />
         </div>
 
-        <h1 id="fp-heading" ref={headingRef} tabIndex={-1} className="fp-title">
-          لا يمكن تغيير كلمة المرور
+        {/* النصوص */}
+        <h1
+          id="forgot-heading"
+          ref={headingRef}
+          tabIndex={-1}
+          className="forgot-title"
+        >
+          🚫 لا يمكن تغيير كلمة المرور
         </h1>
 
-        <p className="fp-message">
-          نعتذر، لا يمكن تغيير كلمة المرور في هذه المرحلة لأي سبب كان. هذا إجراء أمني لحماية الحسابات والمحتوى.
+        <p className="forgot-message">
+          لأسباب أمنية وسياسات المنصة، لا يمكن تعديل كلمة المرور مهما كانت الظروف.
         </p>
 
-        <p className="fp-note">
-          إن احتجت مساعدة إضافية تواصل مع فريق الدعم الفني وسنقدّم المساعدة المناسبة.
+        <p className="forgot-note">
+          إذا واجهت مشكلة في الدخول، يرجى التواصل مع فريق الدعم الفني.
         </p>
 
-        <div className="fp-actions" role="group" aria-label="إجراءات">
+        {/* الأزرار */}
+        <div className="forgot-actions">
           <button
             type="button"
-            className="fp-btn fp-btn-ghost"
+            className="btn btn-ghost"
             onClick={() => router.back()}
             aria-label="العودة"
           >
             ← رجوع
           </button>
-
           <button
             type="button"
-            className="fp-btn fp-btn-primary"
+            className="btn btn-primary"
             onClick={() => router.push('/')}
             aria-label="الصفحة الرئيسية"
           >
@@ -76,172 +70,150 @@ export default function ForgotPage() {
         </div>
       </section>
 
+      {/* أنماط حديثة ومتجاوبة */}
       <style jsx>{`
-        :root {
-          --bg-1: #071026;
-          --bg-2: #081426;
-          --accent-a: #06b6d4;
-          --accent-b: #7c3aed;
-          --glass: rgba(255,255,255,0.03);
-        }
-
-        .fp-root {
+        .forgot-root {
           min-height: 100vh;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
-          padding: 20px;
+          background: #0a0a0a;
+          font-family: 'Inter', system-ui, sans-serif;
+          color: #fff;
           position: relative;
           overflow: hidden;
-          font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-          color: #e6eef8;
+          padding: 20px;
         }
 
-        .fp-bg {
+        /* خلفية إعلامية */
+        .forgot-bg {
           position: absolute;
           inset: 0;
           z-index: 0;
-          pointer-events: none;
         }
-
-        .fp-grad {
+        .forgot-gradient {
           position: absolute;
           inset: 0;
-          background: radial-gradient(circle at 30% 30%, rgba(124,58,237,0.08), transparent 20%),
-                      radial-gradient(circle at 70% 70%, rgba(6,182,212,0.06), transparent 20%);
-          opacity: 0.9;
+          background: radial-gradient(circle at 30% 30%, #7c3aed, transparent 60%),
+                      radial-gradient(circle at 70% 70%, #06b6d4, transparent 60%);
+          opacity: 0.4;
+        }
+        .forgot-grid {
+          position: absolute;
+          inset: 0;
+          background-image: linear-gradient(#ffffff0a 1px, transparent 1px),
+                            linear-gradient(90deg, #ffffff0a 1px, transparent 1px);
+          background-size: 40px 40px;
+          opacity: 0.2;
         }
 
-        .fp-card {
+        /* البطاقة */
+        .forgot-card {
           z-index: 2;
+          background: rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(12px);
+          border-radius: 20px;
+          padding: 24px;
+          max-width: 420px;
           width: 100%;
-          max-width: 520px;
-          background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-          border-radius: 16px;
-          padding: 18px;
-          box-shadow: 0 28px 80px rgba(2,6,23,0.6);
-          border: 1px solid var(--glass);
+          box-shadow: 0 20px 60px rgba(0,0,0,0.6);
           display: flex;
           flex-direction: column;
-          gap: 12px;
           align-items: center;
           text-align: center;
+          transform: translateZ(0);
         }
 
-        .fp-top {
-          width: 100%;
-          display: flex;
-          gap: 12px;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .fp-badge-3d {
-          width: 96px;
-          height: 96px;
-          border-radius: 14px;
+        /* الشعار */
+        .forgot-logo {
           position: relative;
-          transform: translateZ(40px) rotateX(6deg);
-          box-shadow: 0 18px 48px rgba(2,6,23,0.6), inset 0 -8px 18px rgba(0,0,0,0.28);
-          background: linear-gradient(135deg, rgba(239,68,68,0.95), rgba(6,182,212,0.95));
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
+          margin-bottom: 16px;
         }
-
-        .fp-badge-face { width: 100%; height: 100%; display:flex; align-items:center; justify-content:center; border-radius:14px; }
-        .fp-badge-es { font-weight: 900; color: #fff; font-size: 22px; letter-spacing: 0.02em; }
-
-        .fp-badge-edge {
+        .logo-3d {
+          border-radius: 50%;
+          overflow: hidden;
+          box-shadow: 0 12px 30px rgba(124,58,237,0.4),
+                      0 -6px 20px rgba(6,182,212,0.3);
+          transform: rotateY(10deg) rotateX(6deg);
+        }
+        .logo-glow {
           position: absolute;
-          left: 6px;
-          top: 6px;
-          right: -6px;
-          bottom: -6px;
-          border-radius: 16px;
-          background: linear-gradient(90deg, rgba(0,0,0,0.08), rgba(255,255,255,0.02));
-          transform: translateZ(-12px);
-          filter: blur(6px);
+          inset: -10px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(124,58,237,0.4), transparent 70%);
+          filter: blur(20px);
           z-index: -1;
         }
 
-        .fp-thumb {
-          width: 120px;
-          height: 120px;
-          border-radius: 14px;
-          overflow: hidden;
-          box-shadow: 0 12px 30px rgba(6,182,212,0.08);
-          border: 1px solid rgba(255,255,255,0.04);
-          transform: translateZ(20px) rotateX(4deg);
-        }
-
-        .fp-thumb-gloss {
-          position: absolute;
-          width: 120px;
-          height: 120px;
-          border-radius: 14px;
-          background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-          mix-blend-mode: overlay;
-          pointer-events: none;
-        }
-
-        .fp-title {
-          margin: 0;
+        /* النصوص */
+        .forgot-title {
           font-size: 20px;
           font-weight: 800;
-          color: #fff;
-          text-shadow: 0 6px 20px rgba(124,58,237,0.06);
-        }
-
-        .fp-message {
           margin: 0;
-          color: rgba(230,238,248,0.95);
-          font-size: 14px;
+          text-shadow: 0 4px 12px rgba(6,182,212,0.4);
+        }
+        .forgot-message {
+          margin-top: 12px;
+          font-size: 15px;
           line-height: 1.6;
+          color: #e5e7eb;
         }
-
-        .fp-note {
-          margin: 0;
-          color: rgba(230,238,248,0.72);
+        .forgot-note {
+          margin-top: 8px;
           font-size: 13px;
+          color: #9ca3af;
         }
 
-        .fp-actions {
+        /* الأزرار */
+        .forgot-actions {
+          margin-top: 20px;
           display: flex;
-          gap: 10px;
-          margin-top: 6px;
+          gap: 12px;
+          flex-wrap: wrap;
+          justify-content: center;
         }
-
-        .fp-btn {
-          padding: 10px 14px;
+        .btn {
+          padding: 10px 16px;
           border-radius: 10px;
-          font-weight: 800;
+          font-weight: 700;
           font-size: 14px;
           cursor: pointer;
-          border: none;
-          transition: transform 160ms ease, box-shadow 160ms ease;
+          transition: transform 0.2s, box-shadow 0.2s;
         }
-
-        .fp-btn-ghost {
+        .btn:active {
+          transform: scale(0.97);
+        }
+        .btn-ghost {
           background: transparent;
-          color: #dbeafe;
-          border: 1px solid rgba(219,234,254,0.06);
+          color: #fff;
+          border: 1px solid rgba(255,255,255,0.2);
         }
-
-        .fp-btn-primary {
-          background: linear-gradient(90deg, var(--accent-a) 0%, var(--accent-b) 100%);
+        .btn-ghost:hover {
+          background: rgba(255,255,255,0.1);
+        }
+        .btn-primary {
+          background: linear-gradient(90deg, #06b6d4, #7c3aed);
           color: #001219;
-          box-shadow: 0 10px 30px rgba(6,182,212,0.12);
+          border: none;
+          box-shadow: 0 8px 24px rgba(124,58,237,0.4);
+        }
+        .btn-primary:hover {
+          box-shadow: 0 12px 30px rgba(6,182,212,0.5);
+          transform: translateY(-2px);
         }
 
-        @media (max-width: 520px) {
-          .fp-card { padding: 14px; border-radius: 12px; gap: 10px; }
-          .fp-badge-3d { width: 88px; height: 88px; transform: translateZ(36px) rotateX(4deg); }
-          .fp-thumb { width: 96px; height: 96px; transform: translateZ(30px) rotateX(4deg); }
-          .fp-title { font-size: 18px; }
-          .fp-message { font-size: 14px; }
+        /* تجاوب للهاتف */
+        @media (max-width: 480px) {
+          .forgot-card {
+            padding: 18px;
+            border-radius: 16px;
+          }
+          .forgot-title {
+            font-size: 18px;
+          }
+          .forgot-message {
+            font-size: 14px;
+          }
         }
       `}</style>
     </main>
