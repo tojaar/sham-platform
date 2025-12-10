@@ -353,6 +353,8 @@ setTimeout(() => setNotice(null), 3000);
           background:#fff;
           font-size:14px;
           outline:none;
+          color: #0b0b0b; /* لون النص داخل الحقول: أسود قاتم */
+          -webkit-text-fill-color: #0b0b0b; /* تحسين التوافق في بعض المتصفحات */
         }
         .field-input:focus{ box-shadow: 0 6px 18px rgba(212, 51, 6, 0.06); border-color: var(--accent-2); }
 
@@ -443,7 +445,7 @@ setTimeout(() => setNotice(null), 3000);
       <div className="container">
         {/* Header */}
         <section className="header">
-          <div className="brand-pill" aria-hidden>
+          <div className="brand-pill" aria-hidden={true}>
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{ color: '#f59e0b' }}>
               <path d="M12 2l3 6 6 .5-4.5 3.8L18 20l-6-3.5L6 20l1.5-7.7L3 8.5 9 8 12 2z" fill="currentColor" />
             </svg>
@@ -509,7 +511,6 @@ setTimeout(() => setNotice(null), 3000);
                 دفع USDT
               </button>
 
-              {/* copy link buttons are hidden until a method is selected; keep them available but visually subtle */}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   type="button"
