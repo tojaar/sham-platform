@@ -54,7 +54,7 @@ export default function ForgotPage() {
           <div className="fp-thumb-wrap" aria-hidden="false">
             <div className="fp-thumb-3d">
               <Image
-                src="/assets/tojat.png"
+                src="@/assets/tojat.png"
                 alt="شعار المنصة"
                 width={160}
                 height={160}
