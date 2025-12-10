@@ -108,22 +108,7 @@ export default function VisitorPage() {
             </button>
           </div>
 
-          {/* ميزات إضافية اختيارية */}
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 items-center justify-center">
-            <a
-              href="/about"
-              className="text-sm text-white/80 underline hover:text-white transition"
-            >
-              من نحن
-            </a>
-            <div className="h-px w-6 bg-white/10 hidden sm:block" />
-            <a
-              href="/contact"
-              className="text-sm text-white/80 underline hover:text-white transition"
-            >
-              تواصل معنا
-            </a>
-          </div>
+        
         </div>
       </section>
 

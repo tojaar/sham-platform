@@ -27,7 +27,7 @@ export default function ForgotPage() {
           <div className="logo-3d">
             {/* استخدمت وسم img بمسار ثابت من public لضمان العرض بدون أخطاء تحسين next/image */}
             <img
-              src="/assets/tojar.png"
+              src="/assets/tojar2.png"
               alt="شعار المنصة"
               width={120}
               height={120}
