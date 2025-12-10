@@ -175,7 +175,7 @@ const HomePage: React.FC = () => {
             </Link>
           </div>
 
-          <div className="footer">الشركة العالمية للتجارة واللأعمال· جميع الحقوق محفوظة</div>
+          <div className="footer">الشركة العالمية للتجارة واللأعمال·  enterspace.sp.usdt@gmai.com  .</div>
         </section>
       </div>
 

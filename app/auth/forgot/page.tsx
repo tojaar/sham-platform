@@ -52,7 +52,7 @@ export default function ForgotPage() {
         </p>
 
         <p className="forgot-note">
-          إذا واجهت مشكلة في الدخول، يرجى التواصل مع فريق الدعم الفني.
+          إذا واجهت مشكلة في الدخول، يرجى التواصل مع فريق الدعم الفني على البريد الالكتروني enterspace.sp.usdt@gmai.com  .
         </p>
 
         {/* الأزرار */}
