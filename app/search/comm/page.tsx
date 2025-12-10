@@ -586,20 +586,8 @@ export default function SearchCommForm() {
                       <div className="bg-transparent rounded-xl border border-white/6 p-2 sm:p-3">
                         <table className="w-full text-sm sm:text-base" style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
                           <tbody>
-                            <tr>
-                              <td className="w-1/3 text-white/70 align-top py-2 px-2 font-semibold">العنوان</td>
-                              <td className="text-white/90 align-top py-2 px-2">{selected.title ?? '—'}</td>
-                            </tr>
-
-                            <tr>
-                              <td className="text-white/70 align-top py-2 px-2 font-semibold">الشركة</td>
-                              <td className="text-white/90 align-top py-2 px-2">{selected.company ?? '—'}</td>
-                            </tr>
-
-                            <tr>
-                              <td className="text-white/70 align-top py-2 px-2 font-semibold">جهة الاتصال</td>
-                              <td className="text-white/90 align-top py-2 px-2">{selected.contact ?? '—'}</td>
-                            </tr>
+                            
+                              
 
                             <tr>
                               <td className="text-white/70 align-top py-2 px-2 font-semibold">الهاتف</td>
